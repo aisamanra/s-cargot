@@ -1,4 +1,4 @@
-module Data.SExpression.Rivest where
+module Data.SCargot.Rivest where
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS

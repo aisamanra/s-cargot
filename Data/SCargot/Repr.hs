@@ -1,4 +1,4 @@
-module Data.SExpression.Repr
+module Data.SCargot.Repr
        ( SExpr(..)
        , RichSExpr(..)
        , toRich

@@ -1,9 +1,11 @@
-module Data.SExpression.General where
+module Data.SCargot.General where
 
 import           Control.Applicative
 import           Data.Attoparsec.Text
 import           Data.Map.String (Map)
 import qualified Data.Map.String as M
+
+import           Data.SCargot.Repr
 
 type ReaderMacroMap atom = Map Char (Reader atom)
 type Reader atom = (Parser (SExpr atom) -> Parser (SExpr atom))
