@@ -4,7 +4,7 @@
 --   macro definitions, this module should successfully parse and
 --   desugar even quoted lists and vector literals.
 
-module Data.SExpression.CommonLisp where
+module Data.SCargot.CommonLisp where
 
 data Atom
   = Symbol Text
@@ -13,4 +13,4 @@ data Atom
   | True
     deriving (Eq, Show, Read)
 
-parseSexpr :: Text -> Either SExprError 
+parseSexpr :: Text -> Either SExprError

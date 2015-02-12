@@ -1,12 +1,12 @@
 {-# LANGUAGE PatternSynonyms #-}
 
-module Data.SExpression.Repr.Rich
+module Data.SCargot.Repr.Rich
        ( pattern List
        , pattern DotList
        , pattern Atom
        ) where
 
-import Data.SExpression.Repr as R
+import Data.SCargot.Repr as R
 
 pattern List xs = R.RSList xs
 pattern DotList xs = R.RSDotted xs
