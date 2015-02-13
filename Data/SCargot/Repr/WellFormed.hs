@@ -1,7 +1,12 @@
 {-# LANGUAGE PatternSynonyms #-}
 
 module Data.SCargot.Repr.Rich
-       ( pattern List
+       ( -- * 'WellFormedSExpr' representation
+         R.WellFormedSExpr(..)
+       , R.toWellFormed
+       , R.fromWellFormed
+         -- * Useful pattern synonyms
+       , pattern List
        , pattern Atom
        ) where
 
