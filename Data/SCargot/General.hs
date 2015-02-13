@@ -1,4 +1,19 @@
-module Data.SCargot.General where
+module Data.SCargot.General
+  ( -- * SExprSpec
+    SExprSpec
+  , mkSpec
+  , convertSpec
+  , addReader
+  , addCommentType
+  , asRich
+  , asWellFormed
+    -- * A Few Standard Reader Macros
+  , quote
+  , vector
+    -- * Using a SExprSpec
+  , parseSExpr
+  , serializeSExpr
+  ) where
 
 import           Control.Applicative
 import           Data.Attoparsec.Text
@@ -8,21 +23,23 @@ import qualified Data.Map.String as M
 import           Data.SCargot.Repr
 
 type ReaderMacroMap atom = Map Char (Reader atom)
+type CommentMap = Map Char (Parser ())
 type Reader atom = (Parser (SExpr atom) -> Parser (SExpr atom))
 type Serializer atom = atom -> Text
 
 -- | A 'SExprSpec' describes a parser and emitter for a particular
 --   variant of S-Expressions. The @atom@ type corresponds to a
 --   Haskell type used to represent the atoms, and the @carrier@
---   type corresponds to the parsed S-Expression structure. This
---   is deliberately opaque so that it must be constructed and
---   modified with other helper functions.
+--   type corresponds to the parsed S-Expression structure. The
+--   'SExprSpec' type is deliberately opaque so that it must be
+--   constructed and modified with other helper functions.
 data SExprSpec atom carrier = SExprSpec
-  { sesPAtom  :: Parser atom
-  , sesSAtom  :: Serializer atom
-  , rmMap     :: ReaderMacroMap atom
-  , postparse :: SExpr atom -> Either String carrier
-  , preserial :: carrier -> SExpr atom
+  { sesPAtom   :: Parser atom
+  , sesSAtom   :: Serializer atom
+  , readerMap  :: ReaderMacroMap atom
+  , commentMap :: CommentMap
+  , postparse  :: SExpr atom -> Either String carrier
+  , preserial  :: carrier -> SExpr atom
   }
 
 -- | This creates a basic 'SExprSpec' when given a parser and serializer
@@ -53,17 +70,22 @@ convertSpec f g spec = spec
 addReader :: Char -> Reader a -> SExprSpec a c -> SExprSpec a c
 addReader c reader spec = spec { rmMap = insert c reader (rmMap spec) }
 
+addCommentType :: Char -> Comment -> SExprSpec a c -> SExprSpec a c
+addCommentType c comment spec = spec { }
+
 quote :: atom -> Reader atom
 quote q parse = go <$> parse
   where go v = SCons q (SCons v SNil)
 
-toRich :: SExprSpec a (SExpr b) -> SExprSpec a (RichSExpr b)
-toRich = convertSpec (return . toRich) fromRich
+asRich :: SExprSpec a (SExpr b) -> SExprSpec a (RichSExpr b)
+asRich = convertSpec (return . toRich) fromRich
 
-toWellFormed :: SExprSpec a (SExpr b) -> SExprSpec a (WellFormedSExpr b)
-toWellFormed = convertSpec toWellFormed fromWellFormed
+asWellFormed :: SExprSpec a (SExpr b) -> SExprSpec a (WellFormedSExpr b)
+asWellFormed = convertSpec toWellFormed fromWellFormed
 
-parseGenericSExpr :: Parser atom  -> ReaderMacroMap atom -> Parser (SExpr atom)
+parseGenericSExpr :: Parser atom  -> ReaderMacroMap atom -> CommentMap -> Parser (SExpr atom)
+parseGenericSExpr atom reader comment =
+  char '(' *> 
 
 -- |
 parseSExpr :: SExprSpec atom carrier -> Text -> Either String carrier
