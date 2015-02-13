@@ -6,11 +6,27 @@
 
 module Data.SCargot.CommonLisp where
 
-data Atom
-  = Symbol Text
-  | String Text
-  | Integer Int
-  | True
+data CLAtom
+  = CLSymbol Text
+  | CLString Text
+  | CLInteger Integer
+  | CLRatio Integer Integer
+  | CLFloat Double
     deriving (Eq, Show, Read)
 
-parseSexpr :: Text -> Either SExprError
+type CommonLispSpec carrier = SExprSpec CLAtom carrier
+
+withComments :: CommonLispSpec c -> CommonLispSpec c
+withComments = addCommentType (const () <$> (char ';' *> restOfLine))
+
+withQuote :: CommonLispSpec (SCons CLAtom) -> CommonLispSpec (SCons CLAtom)
+withQuote = addReader '\'' (go <$> parse)
+  where go v = SCons q (SCons v SNil)
+
+-- | Adds support for the '#(...)' sugar for vectors. (This will be
+--   parsed as '(vector ...)', and
+withVectors :: CommonLispSpec c -> CommonLispSpec c
+withVectors = addReader '#' (go <$> parse)
+
+parse :: CommonLispSpec c -> Text -> Either String c
+serialize :: CommonLispSpec c -> c -> Text
