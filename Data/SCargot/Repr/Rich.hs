@@ -13,6 +13,6 @@ module Data.SCargot.Repr.Rich
 
 import Data.SCargot.Repr as R
 
-pattern List xs = R.RSList xs
-pattern DotList xs = R.RSDotted xs
-pattern Atom a = R.RSAtom a
+pattern Atom a       = R.RSAtom a
+pattern List xs      = R.RSList xs
+pattern DotList xs x = R.RSDotted xs x

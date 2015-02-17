@@ -1,8 +1,11 @@
 module Data.SCargot.Repr
-       ( SExpr(..)
+       ( -- * Elementary SExpr representation
+         SExpr(..)
+         -- * Rich SExpr representation
        , RichSExpr(..)
        , toRich
        , fromRich
+         -- * Well-Formed SExpr representation
        , WellFormedSExpr(..)
        , toWellFormed
        , fromWellFormed
@@ -23,28 +26,31 @@ data SExpr atom
 --   exposed. In this case, we have 'RSList' to
 --   represent a well-formed cons list, and 'RSDotted'
 --   to represent an improper list of the form
---   @(a b c . d)@.
+--   @(a b c . d)@. This representation is based on
+--   the shape of the parsed S-Expression, and not on
+--   how it was represented, so @(a . (b))@ is going to
+--   be represented as @RSList[RSAtom a, RSAtom b]@
+--   despite having been originally represented as a
+--   dotted list.
 data RichSExpr atom
   = RSList [RichSExpr atom]
   | RSDotted [RichSExpr atom] atom
   | RSAtom atom
     deriving (Eq, Show, Read)
 
--- | A Rich S-Expression might be a nicer interface
---   for certain libraries. It should always be true
---   that
+-- |  It should always be true that
 --
---   > fromRich . toRich == id
+--   > fromRich (toRich x) == x
 --
 --   and that
 --
---   > toRich . fromRich == id
+--   > toRich (fromRich x) == x
 toRich :: SExpr atom -> RichSExpr atom
 toRich (SAtom a) = RSAtom a
-toRich (SCons x xs) = go xs [toRich x]
-  where go (SAtom a) rs    = RSDotted rs a
-        go SNil rs         = RSList rs
-        go (SCons x xs) rs = go xs (toRich x:rs)
+toRich (SCons x xs) = go xs (toRich x:)
+  where go (SAtom a) rs    = RSDotted (rs []) a
+        go SNil rs         = RSList (rs [])
+        go (SCons x xs) rs = go xs (rs . (toRich x:))
 
 -- | This follows the same laws as 'toRich'.
 fromRich :: RichSExpr atom -> SExpr atom
@@ -62,23 +68,30 @@ data WellFormedSExpr atom
   | WFSAtom atom
     deriving (Eq, Show, Read)
 
--- | This will be @Nothing@ is the argument contains an
+-- | This will be @Nothing@ if the argument contains an
 --   improper list. It should hold that
 --
---   > toWellFormed . fromWellFormed == Right
+--   > toWellFormed (fromWellFormed x) == Right x
+--
+--   and also (more tediously) that
+--
+--   > case fromWellFormed (toWellFormed x) of
+--   >   Left _  -> True
+--   >   Right y -> x == y
 toWellFormed :: SExpr atom -> Either String (WellFormedSExpr atom)
+toWellFormed SNil      = return (WFSList [])
 toWellFormed (SAtom a) = return (WFSAtom a)
 toWellFormed (SCons x xs) = do
   x' <- toWellFormed x
-  go xs [x']
+  go xs (x':)
   where go (SAtom a) rs = Left "Found atom in cdr position"
-        go SNil rs      = return (WFSList rs)
+        go SNil rs      = return (WFSList (rs []))
         go (SCons x xs) rs = do
           x' <- toWellFormed x
-          go xs (x':rs)
+          go xs (rs . (x':))
 
 -- | Convert a WellFormedSExpr back into a SExpr.
 fromWellFormed :: WellFormedSExpr atom -> SExpr atom
 fromWellFormed (WFSAtom a)  = SAtom a
 fromWellFormed (WFSList xs) =
-  foldr SCons SNil (map fromWellFormed xs)
+  foldl SCons SNil (map fromWellFormed xs)
