@@ -1,6 +1,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 
-module Data.SCargot.Repr.Rich
+module Data.SCargot.Repr.WellFormed
        ( -- * 'WellFormedSExpr' representation
          R.WellFormedSExpr(..)
        , R.toWellFormed

@@ -4,7 +4,15 @@
 --   macro definitions, this module should successfully parse and
 --   desugar even quoted lists and vector literals.
 
-module Data.SCargot.CommonLisp where
+module Data.SCargot.CommonLisp
+       ( CLAtom(..)
+       , CommonLispSpec
+       , withComments
+       , withQuote
+       , withVectors
+       , decode
+       , encode
+       ) where
 
 data CLAtom
   = CLSymbol Text
@@ -14,7 +22,10 @@ data CLAtom
   | CLFloat Double
     deriving (Eq, Show, Read)
 
-type CommonLispSpec carrier = SExprSpec CLAtom carrier
+data CommonLispSpec carrier = CommonLispSpec
+ { sexprSpec    :: SExprSpec CLAtom carrier
+ , poundReaders :: ReaderMacroMap CLAtom
+ }
 
 withComments :: CommonLispSpec c -> CommonLispSpec c
 withComments = addCommentType (const () <$> (char ';' *> restOfLine))
@@ -28,5 +39,5 @@ withQuote = addReader '\'' (go <$> parse)
 withVectors :: CommonLispSpec c -> CommonLispSpec c
 withVectors = addReader '#' (go <$> parse)
 
-parse :: CommonLispSpec c -> Text -> Either String c
-serialize :: CommonLispSpec c -> c -> Text
+decode :: CommonLispSpec c -> Text -> Either String c
+encode :: CommonLispSpec c -> c -> Text
