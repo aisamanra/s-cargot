@@ -8,7 +8,7 @@ module Data.SCargot.General
   , mkSpec
   , convertSpec
   , addReader
-  , addComment
+  , setComment
     -- * Specific SExprSpec Conversions
   , asRich
   , asWellFormed
@@ -24,27 +24,28 @@ module Data.SCargot.General
   , Serializer
   ) where
 
-import           Control.Applicative ((<*))
+import           Control.Applicative ((<*), (*>), (<|>), (<*>), (<$>), pure)
 import           Control.Monad ((>=>))
 import           Data.Attoparsec.Text
-import           Data.Char (isAlpha)
+import           Data.Char (isAlpha, isDigit, isAlphaNum)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import           Data.Text (Text)
+import           Data.Text (Text, pack, unpack)
 
 import           Prelude hiding (takeWhile)
 
 import           Data.SCargot.Repr
 
 type ReaderMacroMap atom = Map Char (Reader atom)
-type CommentMap = Map Char Comment
 
 -- | A 'Reader' represents a reader macro: it takes a parser for
 --   the S-Expression type and performs as much or as little
 --   parsing as it would like, and then returns an S-expression.
 type Reader atom = (Parser (SExpr atom) -> Parser (SExpr atom))
 
--- | A 'Comment' represents any kind of skippable comment.
+-- | A 'Comment' represents any kind of skippable comment. This
+--   parser __must__ be able to fail if a comment is not being
+--   recognized, and it __must__ not consume any input.
 type Comment = Parser ()
 
 -- | A 'Serializer' is any function which can serialize an Atom
@@ -61,19 +62,23 @@ data SExprSpec atom carrier = SExprSpec
   { sesPAtom   :: Parser atom
   , sesSAtom   :: Serializer atom
   , readerMap  :: ReaderMacroMap atom
-  , comment    :: Comment
+  , comment    :: Maybe Comment
   , postparse  :: SExpr atom -> Either String carrier
   , preserial  :: carrier -> SExpr atom
   }
 
 -- | Create a basic 'SExprSpec' when given a parser and serializer
---   for an atom type.
+--   for an atom type. A small minimal 'SExprSpec' that recognizes
+--   any alphanumeric sequence as a valid atom looks like:
+--
+--   > simpleSpec :: SExprSpec Text (SExpr Text)
+--   > simpleSpec = mkSpec (takeWhile1 isAlphaNum) id
 mkSpec :: Parser atom -> Serializer atom -> SExprSpec atom (SExpr atom)
 mkSpec p s = SExprSpec
   { sesPAtom   = p
   , sesSAtom   = s
   , readerMap  = M.empty
-  , commentMap = skipSpace
+  , comment    = Nothing
   , postparse  = return
   , preserial  = id
   }
@@ -81,12 +86,32 @@ mkSpec p s = SExprSpec
 -- | Modify the carrier type for a 'SExprSpec'. This is
 --   used internally to convert between various 'SExpr' representations,
 --   but could also be used externally to add an extra conversion layer
---   onto a 'SExprSpec', e.g. for a custom Lisp-like language:
+--   onto a 'SExprSpec'.
 --
---   > mySpec :: SExprSpec MyAtomType MyAST
---   > mySpec = convertSpec sexprToMyAST myASTToSexpr spec
---   >   where spec = mkSpec myParser mySerializer
-convertSpec :: (b -> Either String c) -> (c -> b) -> SExprSpec a b -> SExprSpec a c
+--   The following defines an S-expression spec that recognizes the
+--   language of binary addition trees. It does so by first transforming
+--   the internal S-expression representation using 'asWellFormed', and
+--   then providing a conversion between the 'WellFormedSExpr' type and
+--   an @Expr@ AST. Notice that the below parser uses 'String' as its
+--   underlying atom type.
+--
+--   > data Expr = Add Expr Expr | Num Int deriving (Eq, Show)
+--   >
+--   > toExpr :: WellFormedSExpr String -> Either String Expr
+--   > toExpr (WFSList [WFSAtom "+", l, r]) = Add <$> toExpr l <*> toExpr r
+--   > toExpr (WFSAtom c) | all isDigit c   = pure (Num (read c))
+--   > toExpr c                             = Left ("Invalid expr: " ++ show c)
+--   >
+--   > fromExpr :: Expr -> WellFormedSExpr String
+--   > fromExpr (Add l r) = WFSList [WFSAtom "+", fromExpr l, fromExpr r]
+--   > fromExpr (Num n)   = WFSAtom (show n)
+--   >
+--   > mySpec :: SExprSpec String Expr
+--   > mySpec = convertSpec toExpr fromExpr $ asWellFormed $ mkSpec parser pack
+--   >   where parser = unpack <$> takeWhile1 isValidChar
+--   >         isValidChar c = isDigit c || c == '+'
+convertSpec :: (b -> Either String c) -> (c -> b)
+               -> SExprSpec a b -> SExprSpec a c
 convertSpec f g spec = spec
   { postparse = postparse spec >=> f
   , preserial = preserial spec . g
@@ -108,19 +133,38 @@ asWellFormed = convertSpec toWellFormed fromWellFormed
 --   can be recursively called to parse more S-Expressions, and begins
 --   parsing after the reader character has been removed from the
 --   stream.
+--
+--   The following defines an S-expression variant that treats
+--   @'expr@ as being sugar for @(quote expr)@:
+--
+--   > mySpec :: SExprSpec Text (SExpr Text)
+--   > mySpec = addReader '\'' reader $ mkSpec (takeWhile1 isAlphaNum) id
+--   >   where reader p = quote <$> p
+--   >         quote e  = SCons (SAtom "quote") (SCons e SNil)
 addReader :: Char -> Reader a -> SExprSpec a c -> SExprSpec a c
 addReader c reader spec = spec
   { readerMap = M.insert c reader (readerMap spec) }
 
--- | Add the ability to ignore some kind of comment. If the comment
---   parser overlaps with a reader macro or the atom parser, then the
---   former will be tried first.
+-- | Add the ability to ignore some kind of comment. This gets
+--   factored into whitespace parsing, and it's very important that
+--   the parser supplied __be able to fail__ (as otherwise it will
+--   cause an infinite loop), and also that it __not consume any input__
+--   (which may require it to be wrapped in 'try'.)
+--
+--   The following code defines an S-expression variant that skips
+--   C++-style comments, i.e. those which begin with @//@ and last
+--   until the end of a line:
+--
+--   > t :: SExprSpec Text (SExpr Text)
+--   > t = setComment comm $ mkSpec (takeWhile1 isAlphaNum) id
+--   >   where comm = try (string "//" *> takeWhile (/= '\n') *> pure ())
+
 setComment :: Comment -> SExprSpec a c -> SExprSpec a c
-setComment c spec = spec { comment = c }
+setComment c spec = spec { comment = Just c }
 
 -- | Add the ability to skip line comments beginning with a semicolon.
 withSemicolonComments :: SExprSpec a c -> SExprSpec a c
-withSemicolonComments = addComment ';' (skipWhile (\ c -> c /= '\n'))
+withSemicolonComments = setComment (char ';' >> takeWhile (/='\n') >> return ())
 
 -- | Add the ability to understand a quoted S-Expression. In general,
 --   many Lisps use @'sexpr@ as sugar for @(quote sexpr)@. This is
@@ -128,9 +172,8 @@ withSemicolonComments = addComment ';' (skipWhile (\ c -> c /= '\n'))
 --   expressions to a 'SExprSpec', provided that you supply which
 --   atom you want substituted in for the symbol @quote@.
 withQuote :: a -> SExprSpec a (SExpr a) -> SExprSpec a (SExpr a)
-withQuote q = addReader '\'' prs
-  where prs p = go `fmap` p
-        go s  = SCons (SAtom q) (SCons s SNil)
+withQuote q = addReader '\'' (fmap go)
+  where go s  = SCons (SAtom q) (SCons s SNil)
 
 parseGenericSExpr ::
   Parser atom  -> ReaderMacroMap atom -> Parser () -> Parser (SExpr atom)
@@ -174,23 +217,10 @@ parseList sExpr skip = do
 
 -- | Given a CommentMap, create the corresponding parser to
 --   skip those comments (if they exist).
-buildSkip :: CommentMap -> Parser ()
-buildSkip m = skipSpace >> comments >> skipSpace
-  where comments = do
-          c <- peekChar
-          case c of
-            Nothing -> return ()
-            Just c' -> case M.lookup c' m of
-              Just p  -> anyChar >> p
-              Nothing -> return ()
-
-(#) :: a -> (a -> b) -> b
-(#) = flip ($)
-
-testSpec :: SExprSpec Text (SExpr Text)
-testSpec = mkSpec (takeWhile1 isAlpha) id
-         # withQuote "quote"
-         # addReader '#' (\ p -> SCons (SAtom "vector") `fmap` p)
+buildSkip :: Maybe (Parser ()) -> Parser ()
+buildSkip Nothing  = skipSpace
+buildSkip (Just c) = alternate
+  where alternate = skipSpace >> ((c >> alternate) <|> return ())
 
 -- | Decode a single S-expression. If any trailing input is left after
 --   the S-expression (ignoring comments or whitespace) then this
@@ -198,7 +228,7 @@ testSpec = mkSpec (takeWhile1 isAlpha) id
 --   all the S-expressions found at the top level.
 decodeOne :: SExprSpec atom carrier -> Text -> Either String carrier
 decodeOne SExprSpec { .. } = parseOnly (parser <* endOfInput) >=> postparse
-  where parser = parseGenericSExpr sesPAtom readerMap (buildSkip commentMap)
+  where parser = parseGenericSExpr sesPAtom readerMap (buildSkip comment)
 
 -- | Decode several S-expressions according to a given 'SExprSpec'. This
 --   will return a list of every S-expression that appears at the top-level
@@ -206,7 +236,7 @@ decodeOne SExprSpec { .. } = parseOnly (parser <* endOfInput) >=> postparse
 decode :: SExprSpec atom carrier -> Text -> Either String [carrier]
 decode SExprSpec { .. } =
   parseOnly (many1 parser <* endOfInput) >=> mapM postparse
-    where parser = parseGenericSExpr sesPAtom readerMap (buildSkip commentMap)
+    where parser = parseGenericSExpr sesPAtom readerMap (buildSkip comment)
 
 -- | Emit an S-Expression in a machine-readable way. This
 encode :: SExprSpec atom carrier -> carrier -> Text

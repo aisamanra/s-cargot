@@ -6,8 +6,6 @@ import qualified Data.ByteString.Base64 as B64
 import           Data.Text (Text)
 import qualified Data.Text as T
 
-newtype Atom = Atom { fromAtom :: ByteString } deriving (Eq, Show, Read)
-
 pToken :: Parser ByteString
 pToken = undefined
 

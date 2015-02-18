@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveFunctor #-}
+
 module Data.SCargot.Repr
        ( -- * Elementary SExpr representation
          SExpr(..)
@@ -19,7 +21,7 @@ data SExpr atom
   = SCons (SExpr atom) (SExpr atom)
   | SAtom atom
   | SNil
-    deriving (Eq, Show, Read)
+    deriving (Eq, Show, Read, Functor)
 
 -- | Sometimes, the cons-based interface is too low
 --   level, and we'd rather have the lists themselves
@@ -36,7 +38,7 @@ data RichSExpr atom
   = RSList [RichSExpr atom]
   | RSDotted [RichSExpr atom] atom
   | RSAtom atom
-    deriving (Eq, Show, Read)
+    deriving (Eq, Show, Read, Functor)
 
 -- |  It should always be true that
 --
@@ -66,7 +68,7 @@ fromRich (RSDotted xs x) = foldr SCons (SAtom x) (map fromRich xs)
 data WellFormedSExpr atom
   = WFSList [WellFormedSExpr atom]
   | WFSAtom atom
-    deriving (Eq, Show, Read)
+    deriving (Eq, Show, Read, Functor)
 
 -- | This will be @Nothing@ if the argument contains an
 --   improper list. It should hold that
