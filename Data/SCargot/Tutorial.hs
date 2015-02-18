@@ -9,24 +9,24 @@
 module Data.SCargot.Tutorial
   ( -- * Basic Usage and Organization
     -- $usage
-    -- * Analyzing Scheme code
-    -- $scheme
     -- * Building a Custom Config Format
     -- $config
+    -- * Analyzing Scheme code
+    -- $scheme
     -- * Building a Custom Lisp
     -- $lisp
   ) where
 
 {- $usage
+When people talk about s-expressions, they're really talking about
+a _family_ of formats that have in common a rough structure and
+the fact that -}
+
+{- $config
 
 -}
 
 {- $scheme
-
--}
-
-
-{- $config
 
 -}
 
