@@ -32,6 +32,7 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Monoid ((<>))
 import           Data.Text (Text, pack, unpack)
+import qualified Data.Text as T
 
 import           Prelude hiding (takeWhile)
 
@@ -250,5 +251,8 @@ encodeSExpr (SCons x xs) t = go xs (encodeSExpr x t)
 
 -- | Emit an S-Expression in a machine-readable way. This does no
 --   pretty-printing or indentation, and produces no comments.
-encode :: SExprSpec atom carrier -> carrier -> Text
-encode SExprSpec { .. } c = encodeSExpr (preserial c) sesSAtom
+encodeOne :: SExprSpec atom carrier -> carrier -> Text
+encodeOne SExprSpec { .. } c = encodeSExpr (preserial c) sesSAtom
+
+encode :: SExprSpec atom carrier -> [carrier] -> Text
+encode spec cs = T.concat (map (encodeOne spec) cs)
