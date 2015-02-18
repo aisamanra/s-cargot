@@ -30,6 +30,7 @@ import           Data.Attoparsec.Text
 import           Data.Char (isAlpha, isDigit, isAlphaNum)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import           Data.Monoid ((<>))
 import           Data.Text (Text, pack, unpack)
 
 import           Prelude hiding (takeWhile)
@@ -238,6 +239,16 @@ decode SExprSpec { .. } =
   parseOnly (many1 parser <* endOfInput) >=> mapM postparse
     where parser = parseGenericSExpr sesPAtom readerMap (buildSkip comment)
 
--- | Emit an S-Expression in a machine-readable way. This
+-- | Encode (without newlines) a single S-expression.
+encodeSExpr :: SExpr atom -> (atom -> Text) -> Text
+encodeSExpr SNil _         = "()"
+encodeSExpr (SAtom s) t    = t s
+encodeSExpr (SCons x xs) t = go xs (encodeSExpr x t)
+  where go (SAtom s) rs = "(" <> rs <> " . " <> t s <> ")"
+        go SNil rs      = "(" <> rs <> ")"
+        go (SCons x xs) rs = go xs (rs <> " " <> encodeSExpr x t)
+
+-- | Emit an S-Expression in a machine-readable way. This does no
+--   pretty-printing or indentation, and produces no comments.
 encode :: SExprSpec atom carrier -> carrier -> Text
-encode SExprSpec { .. } = undefined
+encode SExprSpec { .. } c = encodeSExpr (preserial c) sesSAtom

@@ -96,4 +96,4 @@ toWellFormed (SCons x xs) = do
 fromWellFormed :: WellFormedSExpr atom -> SExpr atom
 fromWellFormed (WFSAtom a)  = SAtom a
 fromWellFormed (WFSList xs) =
-  foldl SCons SNil (map fromWellFormed xs)
+  foldr SCons SNil (map fromWellFormed xs)
