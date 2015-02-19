@@ -123,7 +123,7 @@ mySpec = mkSpec pAtom sAtom
 We can then use this newly created atom type within an S-expression
 for both parsing and serialization:
 
-~~~~
+~~~~.haskell
 *Data.SCargot.General T> decode mySpec "(foo 1)"
 Right [SCons (SAtom (Ident "foo")) (SCons (SAtom (Num 1)) SNil)]
 *Data.SCargot.General T> encode mySpec [SCons (SAtom (Num 0)) SNil]
@@ -161,7 +161,7 @@ fromExpr (Num n) = RSAtom (T.pack (show n))
 then we could use the `convertSpec` function to add this directly to
 the `SExprSpec`:
 
-~~~~
+~~~~.haskell
 *Data.SCargot.General T> decode (convertSpec toExpr fromExpr (asRich spec)) "(+ 1 2)"
 Right [Add (Num 1) (Num 2)]
 *Data.SCargot.General T> decode (convertSpec toExpr fromExpr (asRich spec)) "(0 1 2)"
@@ -174,7 +174,7 @@ By default, an S-expression spec does not include a comment syntax, but
 the provided `withSemicolonComments` function will cause it to understand
 traditional Lisp line-oriented comments that begin with a semicolon:
 
-~~~~
+~~~~.haskell
 *Data.SCargot.General> decode spec "(this ; has a comment\n inside)\n"
 Left "Failed reading: takeWhile1"
 *Data.SCargot.General> decode (withSemicolonComments spec) "(this ; has a comment\n inside)\n"
@@ -191,7 +191,7 @@ wrapping the parser in a call to `try`
 
 For example, the following adds C++-style comments to an S-expression format:
 
-~~~~
+~~~~.haskell
 *Data.SCargot.General> let cppComment = string "//" >> takeWhile (/= '\n') >> return ()
 *Data.SCargot.General> decode (setComment cppComment spec) "(a //comment\n  b)\n"
 Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
@@ -207,7 +207,7 @@ by keeping a map of characters to AttoParsec parsers that can be used as
 readers. There is a special case for the aforementioned quote, but that
 could easily be written by hand as
 
-~~~~
+~~~~.haskell
 *Data.SCargot.General> let doQuote c = SCons (SAtom "quote") (SCons c SNil)
 *Data.SCargot.General> let qReader = addReader '\'' (\ p -> fmap doQuote p)
 *Data.SCargot.General> decode (qReader mySpec) "'foo"
@@ -220,7 +220,7 @@ may also take as much or as little of the remaining parse stream as it
 would like; for example, the following reader macro does not bother
 parsing anything else and merely returns a new token:
 
-~~~~
+~~~~.haskell
 *Data.SCargot.General> let qmReader = addReader '?' (\ _ -> pure (SAtom "huh"))
 *Data.SCargot.General> decode (qmReader mySpec) "(?1 2)"
 Right [SCons (SAtom "huh") (SCons (SAtom "1") (SCons (SAtom "2") SNil))]
@@ -233,7 +233,7 @@ proper lists, we could define a reader macro that is initialized by the
 `[` character and repeatedly calls the parser until a `]` character
 is reached:
 
-~~~~
+~~~~.haskell
 *Data.SCargot.General> let pVec p = (char ']' *> pure SNil) <|> (SCons <$> p <*> pVec p)
 *Data.SCargot.General> let vec = addReader '[' pVec
 *Data.SCargot.General> decode (asRich (vec mySpec)) "(1 [2 3])"
