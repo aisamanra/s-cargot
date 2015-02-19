@@ -55,15 +55,11 @@ data WellFormedSExpr atom
   | WFSAtom atom
 ~~~~
 
-In the above, an `RSList [a, b, c]` and a
-`WFList [a, b, c]` both correspond to the structure
-`SCons a (SCons b (SCons d SNil))`, which corresponds to an
-S-expression which can be written as
-`(a b c)` or as `(a . (b . (c . ())))`. A `RSDotList`
-corresponds to an sequence of conses that does not terminate
-in an empty list, e.g. `RSDotList [a, b] c` corresponds to
-`SCons a (SCons b (SAtom c))`, which in turn corresponds to
-a structure like `(a b . c)` or `(a . (b . c))`.
+The `WellFormedSExpr` representation should be structurally
+identical to the `RichSExpr` representation in all cases where
+no improper lists appear in the source. Both of those are
+often more convenient than writing multiple nested `SCons`
+constructors in Haskell.
 
 Functions for converting back and forth between
 representations are provided, but you can also modify a
@@ -72,12 +68,12 @@ representation using the `asRich` and `asWellFormed`
 functions.
 
 ~~~~
-*Data.SCargot.General> decode spec "(a b c)"
-Right [SCons (SAtom "a") (SCons (SAtom "b") (SCons (SAtom "c") SNil))]
-*Data.SCargot.General> decode (asRich spec) "(a b c)"
-Right [RSList [RSAtom "a",RSAtom "b",RSAtom "c"]]
-*Data.SCargot.General> decode (asWellFormed spec) "(a b c)"
-Right [WFSList [WFSAtom "a",WFSAtom "b",WFSAtom "c"]]
+*Data.SCargot.General> decode spec "(a b)"
+Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
+*Data.SCargot.General> decode (asRich spec) "(a b)"
+Right [RSList [RSAtom "a",RSAtom "b"]]
+*Data.SCargot.General> decode (asWellFormed spec) "(a b)"
+Right [WFSList [WFSAtom "a",WFSAtom "b"]]
 *Data.SCargot.General> decode spec "(a . b)"
 Right [SCons (SAtom "a") (SAtom "b")]
 *Data.SCargot.General> decode (asRich spec) "(a . b)"
