@@ -82,6 +82,28 @@ Right [RSDotted [RSAtom "a"] "b"]
 Left "Found atom in cdr position"
 ~~~~
 
+These names and patterns can be quite long, so S-Cargot also exports
+several pattern synonyms that can be used both as expressions and
+in pattern-matches to make working with these types less verbose.
+These are each contained in their own module, as their names conflict
+with each other, so it's recommended to only import the type that
+you plan on working with:
+
+~~~~.haskell
+*Data.SCargot.Repr.Basic> A 2 ::: A 3 ::: A 4 ::: Nil
+SCons (SCons (SCons (SAtom 2) (SAtom 3)) (SAtom 4)) SNil
+~~~~
+
+~~~~.haskell
+*Data.SCargot.Repr.WellFormed> L [A 1,A 2,A 3]
+WFSList [WFSAtom 1,WFSAtom 2,WFSAtom 3]
+*Data.SCargot.Repr.WellFormed> let sexprSum (L xs) = sum (map sexprSum xs); sexprSum (A n) = n
+*Data.SCargot.Repr Data.SCargot.Repr.WellFormed> :t sexprSum
+sexprSum :: Num a => WellFormedSExpr a -> a
+*Data.SCargot.Repr.WellFormed> sexprSum (L [A 2, L [A 3, A 4]])
+9
+~~~~
+
 ## Atom Types
 
 Any type can serve as an underlying atom type provided that it has
@@ -142,8 +164,10 @@ type:
 
 ~~~~.haskell
 import           Data.Char (isDigit)
+import           Data.SCargot.General
 import           Data.Text (Text)
 import qualified Data.Text as T
+
 
 data Expr = Add Expr Expr | Num Int deriving (Eq, Show)
 
@@ -240,3 +264,62 @@ is reached:
 *Data.SCargot.General> decode (asRich (vec mySpec)) "(1 [2 3])"
 Right [RSList [RSAtom "1",RSList [RSAtom "2",RSAtom "3"]]]
 ~~~~
+
+## Putting It All Together
+
+Here is a final example which implements a limited arithmetic language
+with Haskell-style line comments and a special reader to understand hex
+literals:
+
+~~~~.haskell
+data Op = Add | Sub | Mul
+data Atom = AOp Op | ANum Int
+data Expr = EOp Op Expr Expr | ENum Int deriving (Eq, Show)
+
+-- Conversions for our Expr type
+toExpr :: SExpr Atom -> Either String Expr
+toExpr (A (AOp op) ::: l ::: r ::: Nil) = EOp op <$> l <*> r
+toExpr (A (ANum n)) = pure (ENum n)
+toExpr sexpr = Left ("Invalid parse: " ++ show sexpr)
+
+fromExpr :: Expr -> SExpr Atom
+fromExpr (EOp op l r) = A (AOp op) ::: fromExpr l ::: fromExpr r ::: Nil
+fromExpr (ENum n)     = ANum n
+
+-- Parser and serializer for our Atom type
+pAtom :: Parser Atom
+pAtom = ((ANum . read . T.unpack) <$> takeWhile1 isDigit)
+     <|> (char "+" *> pure (AOp Add))
+     <|> (char "-" *> pure (AOp Sub))
+     <|> (char "*" *> pure (AOp Mul))
+
+sAtom :: Atom -> Text
+sAtom (AOp Add) = "+"
+sAtom (AOp Sub) = "-"
+sAtom (AOp Mul) = "*"
+sAtom (ANum n)  = T.pack (show n)
+
+-- Our comment syntax
+hsComment :: Parser ()
+hsComment = string "--" >> takeWhile (/= '\n') >> return ()
+
+-- Our custom reader macro
+hexReader :: Reader Atom
+hexReader _ = (Num . readHex . T.unpack) <$> takeWhile1 isHexDigit
+  where isHexDigit c = isDigit c || c `elem` "AaBbCcDdEeFf"
+        rd = readHex . head . fst
+
+-- Our final s-expression family
+myLangSpec :: SExprSpec Atom Expr
+myLangSpec
+  = setComment hsComment        -- set comment syntax to be Haskell-style
+  $ addReader '#' hexReader     -- add hex reader
+  $ convertSpec toExpr fromExpr -- convert final repr to Expr
+  $ mkSpec pAtom sAtom          -- create spec with Atom type
+~~~~
+
+Keep in mind that you often won't need to write all this by hand,
+as you can often use a variety of built-in atom types, reader
+macros, comment types, and representations, but it's a useful
+illustration of all the options that are available to you should
+you need them!
