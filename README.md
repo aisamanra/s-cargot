@@ -126,10 +126,10 @@ readers. There is a special case for the aforementioned quote, but that
 could easily be written by hand as
 
 ~~~~
-*Data.SCargot.General> let mySpec = addReader '\'' (fmap go) spec
-                         where go c = SCons (SAtom "quote") (SCons c SNil)
-*Data.SCargot.General> decode (asRich mySpec) "(1 2 '(3 4))"
-Right [RSList [RSAtom "1",RSAtom "2",RSList [RSAtom "quote",RSList [RSAtom "3",RSAtom "4"]]]]
+*Data.SCargot.General> let doQuote c = SCons (SAtom "quote") (SCons c SNil)
+*Data.SCargot.General> let qReader = addReader '\'' (\ p -> fmap doQuote p)
+*Data.SCargot.General> decode (qReader mySpec) "'foo"
+Right [SCons (SAtom "quote") (SCons (SAtom "foo") SNil)]
 ~~~~
 
 A reader macro is passed the parser that invoked it, so that it can
@@ -139,7 +139,8 @@ would like; for example, the following reader macro does not bother
 parsing anything else and merely returns a new token:
 
 ~~~~
-*Data.SCargot.General> decode (addReader '?' (const (pure (SAtom "huh"))) mySpec) "(?1 2)"
+*Data.SCargot.General> let qmReader = addReader '?' (\ _ -> pure (SAtom "huh"))
+*Data.SCargot.General> decode (qmReader mySpec) "(?1 2)"
 Right [SCons (SAtom "huh") (SCons (SAtom "1") (SCons (SAtom "2") SNil))]
 ~~~~
 
