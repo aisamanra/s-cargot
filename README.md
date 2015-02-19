@@ -86,7 +86,93 @@ Right [RSDotted [RSAtom "a"] "b"]
 Left "Found atom in cdr position"
 ~~~~
 
-# Comments
+## Atom Types
+
+Any type can serve as an underlying atom type provided that it has
+an AttoParsec parser and a serializer (i.e. a way of turning it
+into `Text`.) For these examples, I'm going to use a very simple
+serializer that is roughly like the one found in `Data.SCargot.Basic`,
+which parses symbolic tokens of letters, numbers, and some
+punctuation characters. This means that the 'serializer' here
+is just the identity function:
+
+~~~~.haskell
+spec :: SExprSpec Text (SExpr Text)
+spec = mkSpec (takeWhile1 (\ c -> isAlphaNum c || c `elem` "+-*/!?")) id
+~~~~
+
+A more elaborate atom type would distinguish between different
+varieties of token, so a small example (that understands just
+identifiers and numbers) is
+
+~~~~.haskell
+import           Data.Char (isDigit, isAlpha)
+import           Data.Text (Text)
+import qualified Data.Text as T
+
+data Atom = Ident Text | Num Int deriving (Eq, Show)
+
+pAtom :: Parser Atom
+pAtom =  ((Num . read . T.unpack) <$> takeWhile1 isDigit)
+     <|> (Ident <$> takeWhile1 isAlpha)
+
+sAtom :: Atom -> Text
+sAtom (Ident t) = t
+sAtom (Num n)   = T.pack (show n)
+
+mySpec :: SExprSpec Atom (SExpr Atom)
+mySpec = mkSpec pAtom sAtom
+~~~~
+
+We can then use this newly created atom type within an S-expression
+for both parsing and serialization:
+
+~~~~
+*Data.SCargot.General T> decode mySpec "(foo 1)"
+Right [SCons (SAtom (Ident "foo")) (SCons (SAtom (Num 1)) SNil)]
+*Data.SCargot.General T> encode mySpec [SCons (SAtom (Num 0)) SNil]
+"(0)"
+~~~~
+
+## Carrier Types
+
+As pointed out above, there are three different carrier types that are
+used to represent S-expressions by the library, but you can use any
+type as a carrier type for a spec. This is particularly useful when
+you want to do your own parsing. For example, if we wanted to parse
+a small S-expression-based arithmetic language, we could define a
+data type and transformations from and to an S-expression type:
+
+~~~~.haskell
+import           Data.Char (isDigit)
+import           Data.Text (Text)
+import qualified Data.Text as T
+
+data Expr = Add Expr Expr | Num Int deriving (Eq, Show)
+
+toExpr :: RichSExpr Text -> Either String Expr
+toExpr (RSList [RSAtom "+", l, r]) = Add <$> toExpr l <*> toExpr r
+toExpr (RSAtom c)
+  | T.all isDigit c = pure (Num (read (T.unpack c)))
+  | otherwise       = Left "Non-numeric token as argument"
+toExpr _ = "Unrecognized s-expr"
+
+fromExpr :: Expr -> RichSExpr Text
+fromExpr (Add x y) = RSList [RSAtom "+", fromExpr x, fromExpr y]
+fromExpr (Num n) = RSAtom (T.pack (show n))
+~~~~
+
+then we could use the `convertSpec` function to add this directly to
+the `SExprSpec`:
+
+~~~~
+*Data.SCargot.General T> decode (convertSpec toExpr fromExpr (asRich spec)) "(+ 1 2)"
+Right [Add (Num 1) (Num 2)]
+*Data.SCargot.General T> decode (convertSpec toExpr fromExpr (asRich spec)) "(0 1 2)"
+Left "Unrecognized s-expr"
+~~~~
+
+## Comments
 
 By default, an S-expression spec does not include a comment syntax, but
 the provided `withSemicolonComments` function will cause it to understand
@@ -115,7 +201,7 @@ For example, the following adds C++-style comments to an S-expression format:
 Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
 ~~~~
 
-# Reader Macros
+## Reader Macros
 
 A _reader macro_ is a Lisp macro which is invoked during read time. This
 allows the _lexical_ syntax of a Lisp to be modified. The most commonly
