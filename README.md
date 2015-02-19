@@ -135,9 +135,10 @@ Right [SCons (SAtom (Ident "foo")) (SCons (SAtom (Num 1)) SNil)]
 As pointed out above, there are three different carrier types that are
 used to represent S-expressions by the library, but you can use any
 type as a carrier type for a spec. This is particularly useful when
-you want to do your own parsing. For example, if we wanted to parse
-a small S-expression-based arithmetic language, we could define a
-data type and transformations from and to an S-expression type:
+you want to parse into your own custom tree-like type. For example, if
+we wanted to parse a small S-expression-based arithmetic language, we
+could define a data type and transformations from and to an S-expression
+type:
 
 ~~~~.haskell
 import           Data.Char (isDigit)
@@ -151,7 +152,7 @@ toExpr (RSList [RSAtom "+", l, r]) = Add <$> toExpr l <*> toExpr r
 toExpr (RSAtom c)
   | T.all isDigit c = pure (Num (read (T.unpack c)))
   | otherwise       = Left "Non-numeric token as argument"
-toExpr _ = "Unrecognized s-expr"
+toExpr _ = Left "Unrecognized s-expr"
 
 fromExpr :: Expr -> RichSExpr Text
 fromExpr (Add x y) = RSList [RSAtom "+", fromExpr x, fromExpr y]
