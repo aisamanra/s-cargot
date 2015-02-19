@@ -36,7 +36,7 @@ are isomorphic, as one or the other might be better for processing
 S-expression data, and the third represents only a subset of possible
 S-expressions.
 
-~~~~
+~~~~.haskell
 -- cons-based representation
 data SExpr atom
   = SCons (SExpr atom) (SExpr atom)
@@ -67,7 +67,7 @@ representations are provided, but you can also modify a
 representation using the `asRich` and `asWellFormed`
 functions.
 
-~~~~
+~~~~.haskell
 *Data.SCargot.General> decode spec "(a b)"
 Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
 *Data.SCargot.General> decode (asRich spec) "(a b)"
