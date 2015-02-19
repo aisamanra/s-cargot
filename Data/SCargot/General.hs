@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -229,16 +228,22 @@ buildSkip (Just c) = alternate
 --   will fail: for those cases, use 'decode', which returns a list of
 --   all the S-expressions found at the top level.
 decodeOne :: SExprSpec atom carrier -> Text -> Either String carrier
-decodeOne SExprSpec { .. } = parseOnly (parser <* endOfInput) >=> postparse
-  where parser = parseGenericSExpr sesPAtom readerMap (buildSkip comment)
+decodeOne spec = parseOnly (parser <* endOfInput) >=> (postparse spec)
+  where parser = parseGenericSExpr
+                   (sesPAtom spec)
+                   (readerMap spec)
+                   (buildSkip (comment spec))
 
 -- | Decode several S-expressions according to a given 'SExprSpec'. This
 --   will return a list of every S-expression that appears at the top-level
 --   of the document.
 decode :: SExprSpec atom carrier -> Text -> Either String [carrier]
-decode SExprSpec { .. } =
-  parseOnly (many1 parser <* endOfInput) >=> mapM postparse
-    where parser = parseGenericSExpr sesPAtom readerMap (buildSkip comment)
+decode spec =
+  parseOnly (many1 parser <* endOfInput) >=> mapM (postparse spec)
+    where parser = parseGenericSExpr
+                     (sesPAtom spec)
+                     (readerMap spec)
+                     (buildSkip (comment spec))
 
 -- | Encode (without newlines) a single S-expression.
 encodeSExpr :: SExpr atom -> (atom -> Text) -> Text
@@ -252,7 +257,7 @@ encodeSExpr (SCons x xs) t = go xs (encodeSExpr x t)
 -- | Emit an S-Expression in a machine-readable way. This does no
 --   pretty-printing or indentation, and produces no comments.
 encodeOne :: SExprSpec atom carrier -> carrier -> Text
-encodeOne SExprSpec { .. } c = encodeSExpr (preserial c) sesSAtom
+encodeOne spec c = encodeSExpr (preserial spec c) (sesSAtom spec)
 
 encode :: SExprSpec atom carrier -> [carrier] -> Text
 encode spec cs = T.concat (map (encodeOne spec) cs)
