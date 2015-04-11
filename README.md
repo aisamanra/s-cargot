@@ -68,17 +68,17 @@ representation using the `asRich` and `asWellFormed`
 functions.
 
 ~~~~.haskell
-*Data.SCargot.General> decode spec "(a b)"
+> decode spec "(a b)"
 Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
-*Data.SCargot.General> decode (asRich spec) "(a b)"
+> decode (asRich spec) "(a b)"
 Right [RSList [RSAtom "a",RSAtom "b"]]
-*Data.SCargot.General> decode (asWellFormed spec) "(a b)"
+> decode (asWellFormed spec) "(a b)"
 Right [WFSList [WFSAtom "a",WFSAtom "b"]]
-*Data.SCargot.General> decode spec "(a . b)"
+> decode spec "(a . b)"
 Right [SCons (SAtom "a") (SAtom "b")]
-*Data.SCargot.General> decode (asRich spec) "(a . b)"
+> decode (asRich spec) "(a . b)"
 Right [RSDotted [RSAtom "a"] "b"]
-*Data.SCargot.General> decode (asWellFormed spec) "(a . b)"
+> decode (asWellFormed spec) "(a . b)"
 Left "Found atom in cdr position"
 ~~~~
 
@@ -90,24 +90,24 @@ with each other, so it's recommended to only import the type that
 you plan on working with:
 
 ~~~~.haskell
-*Data.SCargot.Repr.Basic> A 2 ::: A 3 ::: A 4 ::: Nil
+> A 2 ::: A 3 ::: A 4 ::: Nil
 SCons (SCons (SCons (SAtom 2) (SAtom 3)) (SAtom 4)) SNil
 ~~~~
 
 ~~~~.haskell
-*Data.SCargot.Repr.WellFormed> L [A 1,A 2,A 3]
+> L [A 1,A 2,A 3]
 WFSList [WFSAtom 1,WFSAtom 2,WFSAtom 3]
-*Data.SCargot.Repr.WellFormed> let sexprSum (L xs) = sum (map sexprSum xs); sexprSum (A n) = n
-*Data.SCargot.Repr Data.SCargot.Repr.WellFormed> :t sexprSum
+> let sexprSum (L xs) = sum (map sexprSum xs); sexprSum (A n) = n
+> :t sexprSum
 sexprSum :: Num a => WellFormedSExpr a -> a
-*Data.SCargot.Repr.WellFormed> sexprSum (L [A 2, L [A 3, A 4]])
+> sexprSum (L [A 2, L [A 3, A 4]])
 9
 ~~~~
 
 ## Atom Types
 
 Any type can serve as an underlying atom type provided that it has
-an AttoParsec parser and a serializer (i.e. a way of turning it
+an Parsec parser and a serializer (i.e. a way of turning it
 into `Text`.) For these examples, I'm going to use a very simple
 serializer that is roughly like the one found in `Data.SCargot.Basic`,
 which parses symbolic tokens of letters, numbers, and some
@@ -146,9 +146,9 @@ We can then use this newly created atom type within an S-expression
 for both parsing and serialization:
 
 ~~~~.haskell
-*Data.SCargot.General T> decode mySpec "(foo 1)"
+> decode mySpec "(foo 1)"
 Right [SCons (SAtom (Ident "foo")) (SCons (SAtom (Num 1)) SNil)]
-*Data.SCargot.General T> encode mySpec [SCons (SAtom (Num 0)) SNil]
+> encode mySpec [SCons (SAtom (Num 0)) SNil]
 "(0)"
 ~~~~
 
@@ -187,9 +187,9 @@ then we could use the `convertSpec` function to add this directly to
 the `SExprSpec`:
 
 ~~~~.haskell
-*Data.SCargot.General T> decode (convertSpec toExpr fromExpr (asRich spec)) "(+ 1 2)"
+> decode (convertSpec toExpr fromExpr (asRich spec)) "(+ 1 2)"
 Right [Add (Num 1) (Num 2)]
-*Data.SCargot.General T> decode (convertSpec toExpr fromExpr (asRich spec)) "(0 1 2)"
+> decode (convertSpec toExpr fromExpr (asRich spec)) "(0 1 2)"
 Left "Unrecognized s-expr"
 ~~~~
 
@@ -200,14 +200,14 @@ the provided `withSemicolonComments` function will cause it to understand
 traditional Lisp line-oriented comments that begin with a semicolon:
 
 ~~~~.haskell
-*Data.SCargot.General> decode spec "(this ; has a comment\n inside)\n"
+> decode spec "(this ; has a comment\n inside)\n"
 Left "Failed reading: takeWhile1"
-*Data.SCargot.General> decode (withSemicolonComments spec) "(this ; has a comment\n inside)\n"
+> decode (withSemicolonComments spec) "(this ; has a comment\n inside)\n"
 Right [SCons (SAtom "this") (SCons (SAtom "inside") SNil)]
 ~~~~
 
 Additionally, you can provide your own comment syntax in the form of an
-AttoParsec parser. Any AttoParsec parser can be used, so long as it meets
+Parsec parser. Any Parsec parser can be used, so long as it meets
 the following criteria:
 - it is capable of failing (as is called until SCargot believes that there
 are no more comments)
@@ -217,8 +217,8 @@ wrapping the parser in a call to `try`
 For example, the following adds C++-style comments to an S-expression format:
 
 ~~~~.haskell
-*Data.SCargot.General> let cppComment = string "//" >> takeWhile (/= '\n') >> return ()
-*Data.SCargot.General> decode (setComment cppComment spec) "(a //comment\n  b)\n"
+> let cppComment = string "//" >> takeWhile (/= '\n') >> return ()
+> decode (setComment cppComment spec) "(a //comment\n  b)\n"
 Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
 ~~~~
 
@@ -228,14 +228,14 @@ A _reader macro_ is a Lisp macro which is invoked during read time. This
 allows the _lexical_ syntax of a Lisp to be modified. The most commonly
 seen reader macro is the quote, which allows the syntax `'expr` to stand
 in for the s-expression `(quote expr)`. The S-Cargot library enables this
-by keeping a map of characters to AttoParsec parsers that can be used as
+by keeping a map of characters to Parsec parsers that can be used as
 readers. There is a special case for the aforementioned quote, but that
 could easily be written by hand as
 
 ~~~~.haskell
-*Data.SCargot.General> let doQuote c = SCons (SAtom "quote") (SCons c SNil)
-*Data.SCargot.General> let qReader = addReader '\'' (\ p -> fmap doQuote p)
-*Data.SCargot.General> decode (qReader mySpec) "'foo"
+> let quoteExpr c = SCons (SAtom "quote") (SCons c SNil)
+> let withQuote = addReader '\'' (\ p -> fmap quoteExpr p)
+> decode (withQuote mySpec) "'foo"
 Right [SCons (SAtom "quote") (SCons (SAtom "foo") SNil)]
 ~~~~
 
@@ -246,8 +246,8 @@ would like; for example, the following reader macro does not bother
 parsing anything else and merely returns a new token:
 
 ~~~~.haskell
-*Data.SCargot.General> let qmReader = addReader '?' (\ _ -> pure (SAtom "huh"))
-*Data.SCargot.General> decode (qmReader mySpec) "(?1 2)"
+> let qmReader = addReader '?' (\ _ -> pure (SAtom "huh"))
+> decode (qmReader mySpec) "(?1 2)"
 Right [SCons (SAtom "huh") (SCons (SAtom "1") (SCons (SAtom "2") SNil))]
 ~~~~
 
@@ -259,9 +259,9 @@ proper lists, we could define a reader macro that is initialized by the
 is reached:
 
 ~~~~.haskell
-*Data.SCargot.General> let pVec p = (char ']' *> pure SNil) <|> (SCons <$> p <*> pVec p)
-*Data.SCargot.General> let vec = addReader '[' pVec
-*Data.SCargot.General> decode (asRich (vec mySpec)) "(1 [2 3])"
+> let pVec p = (char ']' *> pure SNil) <|> (SCons <$> p <*> pVec p)
+> let vec = addReader '[' pVec
+> decode (asRich (vec mySpec)) "(1 [2 3])"
 Right [RSList [RSAtom "1",RSList [RSAtom "2",RSAtom "3"]]]
 ~~~~
 

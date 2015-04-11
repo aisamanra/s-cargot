@@ -10,9 +10,10 @@ module Data.SCargot.Basic
   , withQuote
   ) where
 
+import           Control.Applicative ((<$>))
 import           Data.Char (isAlphaNum)
-import           Data.Attoparsec.Text (Parser, takeWhile1)
-import           Data.Text (Text)
+import           Text.Parsec -- (Parser, takeWhile1)
+import           Data.Text (Text, pack)
 
 import           Data.SCargot.Repr.Basic
 import           Data.SCargot.General
@@ -20,22 +21,16 @@ import           Data.SCargot.Comments (withLispComments)
 
 isAtomChar :: Char -> Bool
 isAtomChar c = isAlphaNum c
-               || c == '-'
-               || c == '*'
-               || c == '/'
-               || c == '+'
-               || c == '<'
-               || c == '>'
-               || c == '='
-               || c == '!'
-               || c == '?'
+  || c == '-' || c == '*' || c == '/'
+  || c == '+' || c == '<' || c == '>'
+  || c == '=' || c == '!' || c == '?'
 
 -- | A 'SExprSpec' that understands atoms to be sequences of
 --   alphanumeric characters as well as the punctuation
---   characters @-*/+<>=!?@, and does no processing of them.
+--   characters @[-*/+<>=!?]@, and does no processing of them.
 --   This is not quite representative of actual lisps, which
---   would (for example) accept various kinds of string
---   literals. This should be sufficient for most ad-hoc
---   storage or configuration formats.
+--   would, for example, accept various kinds of string
+--   and numeric literals.
 basicSpec :: SExprSpec Text (SExpr Text)
-basicSpec = mkSpec (takeWhile1 isAtomChar) id
+basicSpec = mkSpec pToken id
+  where pToken = pack <$> many1 (satisfy isAtomChar)

@@ -24,10 +24,9 @@ module Data.SCargot.Comments
   , simpleBlockComment
   ) where
 
-import           Control.Applicative ((<|>))
 import           Control.Monad (void)
-import           Data.Attoparsec.Text
 import           Data.Text (Text)
+import           Text.Parsec
 
 import           Prelude hiding (takeWhile)
 
@@ -36,8 +35,8 @@ import Data.SCargot.General
 -- | Given a string, produce a comment parser that matches that
 --   initial string and ignores everything until the end of the
 --   line.
-lineComment :: Text -> Comment
-lineComment s = string s >> takeWhile (/= '\n') >> return ()
+lineComment :: String -> Comment
+lineComment s = string s >> skipMany (noneOf "\n") >> return ()
 
 -- | Given two strings, a begin and an end delimeter, produce a
 --   parser that matches the beginning delimeter and then ignores
@@ -57,7 +56,7 @@ lineComment s = string s >> takeWhile (/= '\n') >> return ()
 -- > /* this /* comment */
 --
 -- is a complete comment.
-simpleBlockComment :: Text -> Text -> Comment
+simpleBlockComment :: String -> String -> Comment
 simpleBlockComment begin end =
   string begin >>
   manyTill anyChar (string end) >>
@@ -129,13 +128,13 @@ For example:
 We can then use these to parse s-expressions with different kinds of
 comment syntaxes:
 
-> decode mySpec "(foo ; a lisp comment\n  bar)\n"
+> > decode mySpec "(foo ; a lisp comment\n  bar)\n"
 > Left "Failed reading: takeWhile1"
-> decode myLispySpec "(foo ; a lisp comment\n  bar)\n"
+> > decode myLispySpec "(foo ; a lisp comment\n  bar)\n"
 > Right [WFSList [WFSAtom "foo", WFSAtom "bar"]]
-> decode mySpec "(foo /* a c-like\n   comment */ bar)\n"
+> > decode mySpec "(foo /* a c-like\n   comment */ bar)\n"
 > Left "Failed reading: takeWhile1"
-> decode myCLikeSpec "(foo /* a c-like\n   comment */ bar)\n"
+> > decode myCLikeSpec "(foo /* a c-like\n   comment */ bar)\n"
 > Right [WFSList [WFSAtom "foo", WFSAtom "bar"]]
 
 -}
