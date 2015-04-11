@@ -31,11 +31,16 @@ import           Data.Monoid ((<>))
 import           Data.String (IsString)
 import           Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
-import           Text.Parsec
+import           Text.Parsec ( (<|>)
+                             , char
+                             , eof
+                             , lookAhead
+                             , many1
+                             , runParser
+                             , skipMany
+                             )
 import           Text.Parsec.Char (anyChar, space)
-import           Text.Parsec.Text
-
-import           Prelude hiding (takeWhile)
+import           Text.Parsec.Text (Parser)
 
 import           Data.SCargot.Repr
 

@@ -26,11 +26,18 @@ module Data.SCargot.Comments
 
 import           Control.Monad (void)
 import           Data.Text (Text)
-import           Text.Parsec
+import           Text.Parsec ( (<|>)
+                             , anyChar
+                             , manyTill
+                             , noneOf
+                             , skipMany
+                             , string
+                             )
 
-import           Prelude hiding (takeWhile)
-
-import Data.SCargot.General
+import Data.SCargot.General ( Comment
+                            , SExprSpec
+                            , setComment
+                            )
 
 -- | Given a string, produce a comment parser that matches that
 --   initial string and ignores everything until the end of the

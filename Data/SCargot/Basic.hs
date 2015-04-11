@@ -12,11 +12,18 @@ module Data.SCargot.Basic
 
 import           Control.Applicative ((<$>))
 import           Data.Char (isAlphaNum)
-import           Text.Parsec -- (Parser, takeWhile1)
+import           Text.Parsec (many1, satisfy)
 import           Data.Text (Text, pack)
 
-import           Data.SCargot.Repr.Basic
-import           Data.SCargot.General
+import           Data.SCargot.Repr.Basic (SExpr)
+import           Data.SCargot.General ( SExprSpec
+                                      , mkSpec
+                                      , asRich
+                                      , asWellFormed
+                                      , addReader
+                                      , setComment
+                                      , withQuote
+                                      )
 import           Data.SCargot.Comments (withLispComments)
 
 isAtomChar :: Char -> Bool
