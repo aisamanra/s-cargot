@@ -34,10 +34,10 @@ import           Text.Parsec ( (<|>)
                              , string
                              )
 
-import Data.SCargot.General ( Comment
-                            , SExprSpec
-                            , setComment
-                            )
+import            Data.SCargot.General ( Comment
+                                       , SExprSpec
+                                       , setComment
+                                       )
 
 -- | Given a string, produce a comment parser that matches that
 --   initial string and ignores everything until the end of the
@@ -57,8 +57,8 @@ lineComment s = string s >> skipMany (noneOf "\n") >> return ()
 --
 -- > { this { comment }
 --
--- to be a complete comment, despite the improper nesting. This is
--- analogous to standard C-style comments in which
+-- to be a complete comment, despite the apparent improper nesting.
+-- This is analogous to standard C-style comments in which
 --
 -- > /* this /* comment */
 --
@@ -124,7 +124,7 @@ of commenting capability, so the below functions will produce a new
 For example:
 
 > mySpec :: SExprSpec Text (SExpr Text)
-> mySpec = asWellFormed (mkSpec (takeWhile1 isAlphaNum) id)
+> mySpec = asWellFormed $ mkSpec (pack <$> many1 alphaNum) id
 >
 > myLispySpec :: SExprSpec Text (SExpr Text)
 > myLispySpec = withLispComments mySpec
@@ -136,11 +136,11 @@ We can then use these to parse s-expressions with different kinds of
 comment syntaxes:
 
 > > decode mySpec "(foo ; a lisp comment\n  bar)\n"
-> Left "Failed reading: takeWhile1"
+> Left "(line 1, column 6):\nunexpected \";\"\nexpecting space or atom"
 > > decode myLispySpec "(foo ; a lisp comment\n  bar)\n"
 > Right [WFSList [WFSAtom "foo", WFSAtom "bar"]]
 > > decode mySpec "(foo /* a c-like\n   comment */ bar)\n"
-> Left "Failed reading: takeWhile1"
+> Left "(line 1, column 6):\nunexpected \"/\"\nexpecting space or atom"
 > > decode myCLikeSpec "(foo /* a c-like\n   comment */ bar)\n"
 > Right [WFSList [WFSAtom "foo", WFSAtom "bar"]]
 

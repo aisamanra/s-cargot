@@ -27,11 +27,13 @@ import           Control.Monad ((>=>))
 import           Data.Char (isAlpha, isDigit, isAlphaNum)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import           Data.Maybe (fromJust)
 import           Data.Monoid ((<>))
 import           Data.String (IsString)
 import           Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
 import           Text.Parsec ( (<|>)
+                             , (<?>)
                              , char
                              , eof
                              , lookAhead
@@ -80,10 +82,10 @@ data SExprSpec atom carrier = SExprSpec
 --   any alphanumeric sequence as a valid atom looks like:
 --
 --   > simpleSpec :: SExprSpec Text (SExpr Text)
---   > simpleSpec = mkSpec (takeWhile1 isAlphaNum) id
+--   > simpleSpec = mkSpec (pack <$> many1 isAlphaNum) id
 mkSpec :: Parser atom -> Serializer atom -> SExprSpec atom (SExpr atom)
 mkSpec p s = SExprSpec
-  { sesPAtom   = p
+  { sesPAtom   = p <?> "atom"
   , sesSAtom   = s
   , readerMap  = M.empty
   , comment    = Nothing
@@ -101,22 +103,22 @@ mkSpec p s = SExprSpec
 --   the internal S-expression representation using 'asWellFormed', and
 --   then providing a conversion between the 'WellFormedSExpr' type and
 --   an @Expr@ AST. Notice that the below parser uses 'String' as its
---   underlying atom type.
+--   underlying atom type, instead of some token type.
 --
 --   > data Expr = Add Expr Expr | Num Int deriving (Eq, Show)
 --   >
 --   > toExpr :: WellFormedSExpr String -> Either String Expr
---   > toExpr (WFSList [WFSAtom "+", l, r]) = Add <$> toExpr l <*> toExpr r
---   > toExpr (WFSAtom c) | all isDigit c   = pure (Num (read c))
---   > toExpr c                             = Left ("Invalid expr: " ++ show c)
+--   > toExpr (L [A "+", l, r])     = Add <$> toExpr l <*> toExpr r
+--   > toExpr (A c) | all isDigit c = pure (Num (read c))
+--   > toExpr c                     = Left ("Invalid expr: " ++ show c)
 --   >
 --   > fromExpr :: Expr -> WellFormedSExpr String
---   > fromExpr (Add l r) = WFSList [WFSAtom "+", fromExpr l, fromExpr r]
---   > fromExpr (Num n)   = WFSAtom (show n)
+--   > fromExpr (Add l r) = L [A "+", fromExpr l, fromExpr r]
+--   > fromExpr (Num n)   = A (show n)
 --   >
 --   > mySpec :: SExprSpec String Expr
 --   > mySpec = convertSpec toExpr fromExpr $ asWellFormed $ mkSpec parser pack
---   >   where parser = unpack <$> takeWhile1 isValidChar
+--   >   where parser = many1 (satisfy isValidChar)
 --   >         isValidChar c = isDigit c || c == '+'
 convertSpec :: (b -> Either String c) -> (c -> b)
                -> SExprSpec a b -> SExprSpec a c
@@ -143,10 +145,12 @@ asWellFormed = convertSpec toWellFormed fromWellFormed
 --   stream.
 --
 --   The following defines an S-expression variant that treats
---   @'expr@ as being sugar for @(quote expr)@:
+--   @'expr@ as being sugar for @(quote expr)@. Note that this is done
+--   already in a more general way by the 'withQuote' function, but
+--   it is a good illustration of using reader macros in practice:
 --
---   > mySpec :: SExprSpec Text (SExpr Text)
---   > mySpec = addReader '\'' reader $ mkSpec (takeWhile1 isAlphaNum) id
+--   > mySpec :: SExprSpec String (SExpr Text)
+--   > mySpec = addReader '\'' reader $ mkSpec (many1 alphaNum) pack
 --   >   where reader p = quote <$> p
 --   >         quote e  = SCons (SAtom "quote") (SCons e SNil)
 addReader :: Char -> Reader a -> SExprSpec a c -> SExprSpec a c
@@ -163,12 +167,12 @@ addReader c reader spec = spec
 --   C++-style comments, i.e. those which begin with @//@ and last
 --   until the end of a line:
 --
---   > t :: SExprSpec Text (SExpr Text)
---   > t = setComment comm $ mkSpec (takeWhile1 isAlphaNum) id
---   >   where comm = try (string "//" *> takeWhile (/= '\n') *> pure ())
+--   > t :: SExprSpec String (SExpr Text)
+--   > t = setComment comm $ mkSpec (many1 alphaNum) pack
+--   >   where comm = try (string "//" *> manyTill newline *> pure ())
 
 setComment :: Comment -> SExprSpec a c -> SExprSpec a c
-setComment c spec = spec { comment = Just c }
+setComment c spec = spec { comment = Just (c <?> "comment") }
 
 -- | Add the ability to understand a quoted S-Expression. In general,
 --   many Lisps use @'sexpr@ as sugar for @(quote sexpr)@. This is
@@ -185,7 +189,7 @@ peekChar = Just <$> lookAhead anyChar <|> pure Nothing
 parseGenericSExpr ::
   Parser atom  -> ReaderMacroMap atom -> Parser () -> Parser (SExpr atom)
 parseGenericSExpr atom reader skip = do
-  let sExpr = parseGenericSExpr atom reader skip
+  let sExpr = parseGenericSExpr atom reader skip <?> "s-expr"
   skip
   c <- peekChar
   r <- case c of

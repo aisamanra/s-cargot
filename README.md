@@ -116,7 +116,7 @@ is just the identity function:
 
 ~~~~.haskell
 spec :: SExprSpec Text (SExpr Text)
-spec = mkSpec (takeWhile1 (\ c -> isAlphaNum c || c `elem` "+-*/!?")) id
+spec = mkSpec (pack <$> many1 (alphaNum <|> oneOf "+-*/!?")) id
 ~~~~
 
 A more elaborate atom type would distinguish between different
@@ -124,19 +124,17 @@ varieties of token, so a small example (that understands just
 identifiers and numbers) is
 
 ~~~~.haskell
-import           Data.Char (isDigit, isAlpha)
-import           Data.Text (Text)
-import qualified Data.Text as T
+import Data.Text (Text, pack)
 
 data Atom = Ident Text | Num Int deriving (Eq, Show)
 
 pAtom :: Parser Atom
-pAtom =  ((Num . read . T.unpack) <$> takeWhile1 isDigit)
-     <|> (Ident <$> takeWhile1 isAlpha)
+pAtom =  ((Num . read) <$> many1 digit)
+     <|> (Ident . pack) <$> takeWhile1 isAlpha)
 
 sAtom :: Atom -> Text
 sAtom (Ident t) = t
-sAtom (Num n)   = T.pack (show n)
+sAtom (Num n)   = pack (show n)
 
 mySpec :: SExprSpec Atom (SExpr Atom)
 mySpec = mkSpec pAtom sAtom
@@ -172,15 +170,15 @@ import qualified Data.Text as T
 data Expr = Add Expr Expr | Num Int deriving (Eq, Show)
 
 toExpr :: RichSExpr Text -> Either String Expr
-toExpr (RSList [RSAtom "+", l, r]) = Add <$> toExpr l <*> toExpr r
-toExpr (RSAtom c)
+toExpr (L [A "+", l, r]) = Add <$> toExpr l <*> toExpr r
+toExpr (A c)
   | T.all isDigit c = pure (Num (read (T.unpack c)))
   | otherwise       = Left "Non-numeric token as argument"
 toExpr _ = Left "Unrecognized s-expr"
 
 fromExpr :: Expr -> RichSExpr Text
-fromExpr (Add x y) = RSList [RSAtom "+", fromExpr x, fromExpr y]
-fromExpr (Num n) = RSAtom (T.pack (show n))
+fromExpr (Add x y) = L [A "+", fromExpr x, fromExpr y]
+fromExpr (Num n)   = A (T.pack (show n))
 ~~~~
 
 then we could use the `convertSpec` function to add this directly to
@@ -196,13 +194,13 @@ Left "Unrecognized s-expr"
 ## Comments
 
 By default, an S-expression spec does not include a comment syntax, but
-the provided `withSemicolonComments` function will cause it to understand
+the provided `withLispComments` function will cause it to understand
 traditional Lisp line-oriented comments that begin with a semicolon:
 
 ~~~~.haskell
 > decode spec "(this ; has a comment\n inside)\n"
-Left "Failed reading: takeWhile1"
-> decode (withSemicolonComments spec) "(this ; has a comment\n inside)\n"
+Left "(line 1, column 7):\nunexpected \";\"\nexpecting space or atom"
+> decode (withLispComments spec) "(this ; has a comment\n inside)\n"
 Right [SCons (SAtom "this") (SCons (SAtom "inside") SNil)]
 ~~~~
 
@@ -217,7 +215,7 @@ wrapping the parser in a call to `try`
 For example, the following adds C++-style comments to an S-expression format:
 
 ~~~~.haskell
-> let cppComment = string "//" >> takeWhile (/= '\n') >> return ()
+> let cppComment = string "//" >> manyTill newline >> return ()
 > decode (setComment cppComment spec) "(a //comment\n  b)\n"
 Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
 ~~~~
@@ -227,8 +225,8 @@ Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
 A _reader macro_ is a Lisp macro which is invoked during read time. This
 allows the _lexical_ syntax of a Lisp to be modified. The most commonly
 seen reader macro is the quote, which allows the syntax `'expr` to stand
-in for the s-expression `(quote expr)`. The S-Cargot library enables this
-by keeping a map of characters to Parsec parsers that can be used as
+in for the s-expression `(quote expr)`. The S-Cargot library accomodates
+this by keeping a map of characters to Parsec parsers that can be used as
 readers. There is a special case for the aforementioned quote, but that
 could easily be written by hand as
 
@@ -272,8 +270,8 @@ with Haskell-style line comments and a special reader to understand hex
 literals:
 
 ~~~~.haskell
-data Op = Add | Sub | Mul
-data Atom = AOp Op | ANum Int
+data Op = Add | Sub | Mul deriving (Eq, Show)
+data Atom = AOp Op | ANum Int deriving (Eq, Show)
 data Expr = EOp Op Expr Expr | ENum Int deriving (Eq, Show)
 
 -- Conversions for our Expr type
@@ -288,7 +286,7 @@ fromExpr (ENum n)     = ANum n
 
 -- Parser and serializer for our Atom type
 pAtom :: Parser Atom
-pAtom = ((ANum . read . T.unpack) <$> takeWhile1 isDigit)
+pAtom = ((ANum . read . T.unpack) <$> many1 isDigit)
      <|> (char "+" *> pure (AOp Add))
      <|> (char "-" *> pure (AOp Sub))
      <|> (char "*" *> pure (AOp Mul))
@@ -301,7 +299,7 @@ sAtom (ANum n)  = T.pack (show n)
 
 -- Our comment syntax
 hsComment :: Parser ()
-hsComment = string "--" >> takeWhile (/= '\n') >> return ()
+hsComment = string "--" >> manyTill newline >> return ()
 
 -- Our custom reader macro
 hexReader :: Reader Atom
