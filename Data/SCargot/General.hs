@@ -22,9 +22,8 @@ module Data.SCargot.General
   , Serializer
   ) where
 
-import           Control.Applicative ((<*), (*>), (<|>), (<*>), (<$>), pure)
+import           Control.Applicative ((<*), (*>), (<*>), (<$>), pure)
 import           Control.Monad ((>=>))
-import           Data.Attoparsec.Text
 import           Data.Char (isAlpha, isDigit, isAlphaNum)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -32,6 +31,9 @@ import           Data.Monoid ((<>))
 import           Data.String (IsString)
 import           Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
+import           Text.Parsec
+import           Text.Parsec.Char (anyChar, space)
+import           Text.Parsec.Text
 
 import           Prelude hiding (takeWhile)
 
@@ -172,6 +174,9 @@ withQuote :: IsString t => SExprSpec t (SExpr t) -> SExprSpec t (SExpr t)
 withQuote = addReader '\'' (fmap go)
   where go s  = SCons "quote" (SCons s SNil)
 
+peekChar :: Parser (Maybe Char)
+peekChar = Just <$> lookAhead anyChar <|> pure Nothing
+
 parseGenericSExpr ::
   Parser atom  -> ReaderMacroMap atom -> Parser () -> Parser (SExpr atom)
 parseGenericSExpr atom reader skip = do
@@ -215,16 +220,21 @@ parseList sExpr skip = do
 -- | Given a CommentMap, create the corresponding parser to
 --   skip those comments (if they exist).
 buildSkip :: Maybe (Parser ()) -> Parser ()
-buildSkip Nothing  = skipSpace
+buildSkip Nothing  = skipMany space
 buildSkip (Just c) = alternate
-  where alternate = skipSpace >> ((c >> alternate) <|> return ())
+  where alternate = skipMany space >> ((c >> alternate) <|> return ())
+
+doParse :: Parser a -> Text -> Either String a
+doParse p t = case runParser p () "" t of
+  Left err -> Left (show err)
+  Right x  -> Right x
 
 -- | Decode a single S-expression. If any trailing input is left after
 --   the S-expression (ignoring comments or whitespace) then this
 --   will fail: for those cases, use 'decode', which returns a list of
 --   all the S-expressions found at the top level.
 decodeOne :: SExprSpec atom carrier -> Text -> Either String carrier
-decodeOne spec = parseOnly (parser <* endOfInput) >=> (postparse spec)
+decodeOne spec = doParse (parser <* eof) >=> (postparse spec)
   where parser = parseGenericSExpr
                    (sesPAtom spec)
                    (readerMap spec)
@@ -235,7 +245,7 @@ decodeOne spec = parseOnly (parser <* endOfInput) >=> (postparse spec)
 --   of the document.
 decode :: SExprSpec atom carrier -> Text -> Either String [carrier]
 decode spec =
-  parseOnly (many1 parser <* endOfInput) >=> mapM (postparse spec)
+  doParse (many1 parser <* eof) >=> mapM (postparse spec)
     where parser = parseGenericSExpr
                      (sesPAtom spec)
                      (readerMap spec)
