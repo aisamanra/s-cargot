@@ -18,6 +18,8 @@ library
                        Data.SCargot.Repr.Rich,
                        Data.SCargot.Repr.WellFormed,
                        Data.SCargot.General,
+                       Data.SCargot.Basic,
+                       Data.SCargot.Comments,
                        Data.SCargot.Tutorial
   -- other-modules:
   -- other-extensions:

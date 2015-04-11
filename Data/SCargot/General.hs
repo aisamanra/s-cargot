@@ -11,7 +11,6 @@ module Data.SCargot.General
     -- * Specific SExprSpec Conversions
   , asRich
   , asWellFormed
-  , withSemicolonComments
   , withQuote
     -- * Using a SExprSpec
   , decode
@@ -30,6 +29,7 @@ import           Data.Char (isAlpha, isDigit, isAlphaNum)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Monoid ((<>))
+import           Data.String (IsString)
 import           Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
 
@@ -163,18 +163,14 @@ addReader c reader spec = spec
 setComment :: Comment -> SExprSpec a c -> SExprSpec a c
 setComment c spec = spec { comment = Just c }
 
--- | Add the ability to skip line comments beginning with a semicolon.
-withSemicolonComments :: SExprSpec a c -> SExprSpec a c
-withSemicolonComments = setComment (char ';' >> takeWhile (/='\n') >> return ())
-
 -- | Add the ability to understand a quoted S-Expression. In general,
 --   many Lisps use @'sexpr@ as sugar for @(quote sexpr)@. This is
 --   a convenience function which allows you to easily add quoted
 --   expressions to a 'SExprSpec', provided that you supply which
 --   atom you want substituted in for the symbol @quote@.
-withQuote :: a -> SExprSpec a (SExpr a) -> SExprSpec a (SExpr a)
-withQuote q = addReader '\'' (fmap go)
-  where go s  = SCons (SAtom q) (SCons s SNil)
+withQuote :: IsString t => SExprSpec t (SExpr t) -> SExprSpec t (SExpr t)
+withQuote = addReader '\'' (fmap go)
+  where go s  = SCons "quote" (SCons s SNil)
 
 parseGenericSExpr ::
   Parser atom  -> ReaderMacroMap atom -> Parser () -> Parser (SExpr atom)

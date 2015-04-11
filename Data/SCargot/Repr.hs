@@ -13,6 +13,8 @@ module Data.SCargot.Repr
        , fromWellFormed
        ) where
 
+import Data.String (IsString(..))
+
 -- | All S-Expressions can be understood as a sequence
 --   of @cons@ cells (represented here by 'SCons'), the
 --   empty list @nil@ (represented by 'SNil') or an
@@ -22,6 +24,9 @@ data SExpr atom
   | SAtom atom
   | SNil
     deriving (Eq, Show, Read, Functor)
+
+instance IsString atom => IsString (SExpr atom) where
+  fromString = SAtom . fromString
 
 -- | Sometimes, the cons-based interface is too low
 --   level, and we'd rather have the lists themselves
@@ -39,6 +44,9 @@ data RichSExpr atom
   | RSDotted [RichSExpr atom] atom
   | RSAtom atom
     deriving (Eq, Show, Read, Functor)
+
+instance IsString atom => IsString (RichSExpr atom) where
+  fromString = RSAtom . fromString
 
 -- |  It should always be true that
 --
@@ -70,6 +78,9 @@ data WellFormedSExpr atom
   | WFSAtom atom
     deriving (Eq, Show, Read, Functor)
 
+instance IsString atom => IsString (WellFormedSExpr atom) where
+  fromString = WFSAtom . fromString
+
 -- | This will be @Nothing@ if the argument contains an
 --   improper list. It should hold that
 --
@@ -77,9 +88,9 @@ data WellFormedSExpr atom
 --
 --   and also (more tediously) that
 --
---   > case fromWellFormed (toWellFormed x) of
+--   > case toWellFormed x of
 --   >   Left _  -> True
---   >   Right y -> x == y
+--   >   Right y -> x == fromWellFormed y
 toWellFormed :: SExpr atom -> Either String (WellFormedSExpr atom)
 toWellFormed SNil      = return (WFSList [])
 toWellFormed (SAtom a) = return (WFSAtom a)
