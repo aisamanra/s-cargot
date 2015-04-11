@@ -1,7 +1,7 @@
 S-Cargot is a library for parsing and emitting S-expressions, designed
 to be flexible, customizable, and extensible. Different uses of
 S-expressions often understand subtly different variations on what an
-S-expression is. The goal of S-Cargot is to create as many reusable
+S-expression is. The goal of S-Cargot is to create several reusable
 components that can be repurposed to nearly any S-expression variant.
 
 Additionally, S-Cargot uses these to include out-of-the-box parsing and
@@ -9,6 +9,15 @@ processing for several existing variations on S-expressions, including
 Common Lisp (**in progresss**), Scheme (**in progress**), the
 [Rivest internet-draft](http://people.csail.mit.edu/rivest/Sexp.txt)
 (**in progress**), and Clojure (**in progress**).
+
+S-Cargot does _not_ aim to be the fastest or most efficient
+s-expression library. If you need speed, then it would probably be
+best to roll your own [AttoParsec]() parser.
+Wherever there's a choice, S-Cargot errs on the side of
+maximum flexibility, which means that it should be easy to
+plug together components to understand various existing flavors of
+s-expressions or to extend it in various ways to accomodate new
+flavors.
 
 The central way of interacting with the S-Cargot library is by creating
 and modifying a _spec_, which is a value that represents a given
@@ -33,8 +42,8 @@ recognized by the parsing. Examples will be shown below.
 
 There are three built-in representations of S-expression lists: two of them
 are isomorphic, as one or the other might be better for processing
-S-expression data, and the third represents only a subset of possible
-S-expressions.
+S-expression data in a particular circumstance, and the third represents
+only a subset of possible S-expressions.
 
 ~~~~.haskell
 -- cons-based representation
