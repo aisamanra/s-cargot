@@ -16,6 +16,7 @@ module Data.SCargot.General
   , decode
   , decodeOne
   , encode
+  , encodeOne
     -- * Useful Type Aliases
   , Reader
   , Comment
