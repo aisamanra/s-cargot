@@ -23,8 +23,8 @@ data CLAtom
     deriving (Eq, Show, Read)
 
 data CommonLispSpec carrier = CommonLispSpec
- { sexprSpec    :: SExprSpec CLAtom carrier
- , poundReaders :: ReaderMacroMap CLAtom
+ { sexprSpec   :: SExprSpec CLAtom carrier
+ , octoReaders :: ReaderMacroMap CLAtom
  }
 
 withComments :: CommonLispSpec c -> CommonLispSpec c

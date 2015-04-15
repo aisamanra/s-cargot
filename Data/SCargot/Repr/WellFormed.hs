@@ -13,6 +13,14 @@ module Data.SCargot.Repr.WellFormed
          -- * Useful processing functions
        , fromPair
        , fromList
+       , fromAtom
+       , asPair
+       , asList
+       , isAtom
+       , asAtom
+       , asAssoc
+       , car
+       , cdr
        ) where
 
 import Control.Applicative ((<$>), (<*>), pure)
@@ -44,6 +52,9 @@ fromList :: Parse t a -> Parse t [a]
 fromList p (L ss) = mapM p ss
 fromList _ sx     = fail ("Expected list")
 
+fromAtom :: Parse t t
+fromAtom (L _) = fail "Expected atom; found list"
+fromAtom (A a) = return a
 
 asPair :: ((S t, S t) -> Either String a) -> S t -> Either String a
 asPair f (L [l, r]) = f (l, r)
@@ -53,13 +64,27 @@ asList :: ([S t] -> Either String a) -> S t -> Either String a
 asList f (L ls) = f ls
 asList _ sx     = fail ("Expected list")
 
-asSymbol :: (t -> Either String a) -> S t -> Either String a
-asSymbol f (A s) = f s
-asSymbol _ sx    = fail ("Expected symbol")
+isAtom :: Eq t => t -> S t -> Either String ()
+isAtom s (A s')
+  | s == s'   = return ()
+  | otherwise = fail ".."
+isAtom _ _  = fail ".."
 
-asAssoc :: ([(S t, S t)] -> Either String a) -> S t -> Either String a
+asAtom :: Show t => (t -> Either String a) -> S t -> Either String a
+asAtom f (A s) = f s
+asAtom _ sx    = fail ("Expected atom; got" ++ show sx)
+
+asAssoc :: Show t => ([(S t, S t)] -> Either String a) -> S t -> Either String a
 asAssoc f (L ss) = gatherPairs ss >>= f
   where gatherPairs (L [a, b] : ss) = (:) <$> pure (a, b) <*> gatherPairs ss
         gatherPairs []              = pure []
         gatherPairs _               = fail "..."
-asAssoc _ sx     = fail ("Expected assoc list")
+asAssoc _ sx     = fail ("Expected assoc list; got " ++ show sx)
+
+car :: (S t -> Either String t') -> [S t] -> Either String t'
+car f (x:_) = f x
+car _ []    = fail "car: Taking car of zero-element list"
+
+cdr :: ([S t] -> Either String t') -> [S t] -> Either String t'
+cdr f (_:xs) = f xs
+cdr _ []     = fail "cdr: Taking cdr of zero-element list"
