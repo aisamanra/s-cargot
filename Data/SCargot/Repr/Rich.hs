@@ -14,6 +14,12 @@ module Data.SCargot.Repr.Rich
          -- * Useful processing functions
        , fromPair
        , fromList
+       , fromAtom
+       , asPair
+       , asList
+       , isAtom
+       , asAtom
+       , asAssoc
        ) where
 
 import Control.Applicative ((<$>), (<*>), pure)
@@ -35,32 +41,59 @@ pattern DL xs x = R.RSDotted xs x
 -- | A shorter alias for `RSList []`
 pattern Nil = R.RSList []
 
-type S t = R.RichSExpr t
-type Parse t a = S t -> Either String a
-
 -- | Utility function for parsing a pair of things.
-fromPair :: Parse t a -> Parse t b -> Parse t (a, b)
+fromPair :: (RichSExpr t -> Either String a)
+         -> (RichSExpr t -> Either String b)
+         -> RichSExpr t -> Either String (a, b)
 fromPair pl pr = asPair $ \(l,r) -> (,) <$> pl l <*> pr r
 
 -- | Utility function for parsing a list of things.
-fromList :: Parse t a -> Parse t [a]
+fromList :: (RichSExpr t -> Either String a) -> RichSExpr t -> Either String [a]
 fromList p = asList $ \ss -> mapM p ss
 
-asPair :: ((S t, S t) -> Either String a) -> S t -> Either String a
+-- | Utility function for parsing a single atom
+fromAtom :: RichSExpr t -> Either String t
+fromAtom (L _) = Left "Expected atom; found list"
+fromAtom (A a) = return a
+
+-- | RichSExpr a -> Either String two-element list (NOT a dotted pair) using the
+--   provided function.
+asPair :: ((RichSExpr t, RichSExpr t) -> Either String a)
+       -> RichSExpr t -> Either String a
 asPair f (L [l, r]) = f (l, r)
-asPair _ sx         = fail ("Expected two-element list")
+asPair _ sx         = Left ("Expected two-element list")
 
-asList :: ([S t] -> Either String a) -> S t -> Either String a
+-- | Parse an arbitrary-length list using the provided function.
+asList :: ([RichSExpr t] -> Either String a)
+       -> RichSExpr t -> Either String a
 asList f (L ls) = f ls
-asList _ sx     = fail ("Expected list")
+asList _ sx     = Left ("Expected list")
 
-asSymbol :: (t -> Either String a) -> S t -> Either String a
-asSymbol f (A s) = f s
-asSymbol _ sx    = fail ("Expected symbol")
+-- | Match a given literal atom, failing otherwise.
+isAtom :: Eq t => t -> RichSExpr t -> Either String ()
+isAtom s (A s')
+  | s == s'   = return ()
+  | otherwise = Left ".."
+isAtom _ _  = Left ".."
 
-asAssoc :: ([(S t, S t)] -> Either String a) -> S t -> Either String a
+-- | Parse an atom using the provided function.
+asAtom :: (t -> Either String a) -> RichSExpr t -> Either String a
+asAtom f (A s) = f s
+asAtom _ sx    = Left ("Expected atom; got list")
+
+-- | Parse an assoc-list using the provided function.
+asAssoc :: Show t => ([(RichSExpr t, RichSExpr t)] -> Either String a)
+        -> RichSExpr t -> Either String a
 asAssoc f (L ss) = gatherPairs ss >>= f
   where gatherPairs (L [a, b] : ss) = (:) <$> pure (a, b) <*> gatherPairs ss
         gatherPairs []              = pure []
-        gatherPairs _               = fail "..."
-asAssoc _ sx     = fail ("Expected assoc list")
+        gatherPairs _               = Left "..."
+asAssoc _ sx     = Left ("Expected assoc list; got " ++ show sx)
+
+car :: (RichSExpr t -> Either String t') -> [RichSExpr t] -> Either String t'
+car f (x:_) = f x
+car _ []    = Left "car: Taking car of zero-element list"
+
+cdr :: ([RichSExpr t] -> Either String t') -> [RichSExpr t] -> Either String t'
+cdr f (_:xs) = f xs
+cdr _ []     = Left "cdr: Taking cdr of zero-element list"

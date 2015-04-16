@@ -10,6 +10,12 @@ module Data.SCargot.Repr.Basic
          -- * Useful processing functions
        , fromPair
        , fromList
+       , fromAtom
+       , asPair
+       , asList
+       , isAtom
+       , asAtom
+       , asAssoc
        ) where
 
 import Control.Applicative ((<$>), (<*>), pure)
@@ -24,38 +30,55 @@ pattern A x = SAtom x
 -- | A (slightly) shorter alias for `SNil`
 pattern Nil = SNil
 
-
-type S t = R.SExpr t
-type Parse t a = R.SExpr t -> Either String a
-
 -- | Utility function for parsing a pair of things.
-fromPair :: Parse t a -> Parse t b -> Parse t (a, b)
+fromPair :: (SExpr t -> Either String a)
+         -> (SExpr t -> Either String b)
+         -> SExpr t -> Either String (a, b)
 fromPair pl pr (l ::: r ::: Nil) = (,) <$> pl l <*> pr r
-fromPair _  _  sx = fail ("Expected two-element list")
+fromPair _  _  sx = Left ("Expected two-element list")
 
 -- | Utility function for parsing a list of things.
-fromList :: Parse t a -> Parse t [a]
+fromList :: (SExpr t -> Either String a) -> SExpr t -> Either String [a]
 fromList p (s ::: ss) = (:) <$> p s <*> fromList p ss
 fromList p Nil        = pure []
-fromList _ sx         = fail ("Expected list")
+fromList _ sx         = Left ("Expected list")
 
-gatherList :: S t -> Either String [S t]
+-- | Utility function for parsing a single atom
+fromAtom :: SExpr t -> Either String t
+fromAtom (A a) = return a
+fromAtom _     = Left "Expected atom; found list"
+
+gatherList :: SExpr t -> Either String [SExpr t]
 gatherList (x ::: xs) = (:) <$> pure x <*> gatherList xs
 gatherList Nil        = pure []
-gatherList sx         = fail ("Expected list")
+gatherList sx         = Left ("Expected list")
 
-asPair :: ((S t, S t) -> Either String a) -> S t -> Either String a
+-- | Parse a two-element list (NOT a dotted pair) using the
+--   provided function.
+asPair :: ((SExpr t, SExpr t) -> Either String a)
+       -> SExpr t -> Either String a
 asPair f (l ::: r ::: SNil) = f (l, r)
-asPair _ sx = fail ("Expected two-element list")
+asPair _ sx = Left ("Expected two-element list")
 
-asList :: ([S t] -> Either String a) -> S t -> Either String a
+-- | Parse an arbitrary-length list using the provided function.
+asList :: ([SExpr t] -> Either String a) -> SExpr t -> Either String a
 asList f ls = gatherList ls >>= f
 
-asSymbol :: (t -> Either String a) -> S t -> Either String a
-asSymbol f (A s) = f s
-asSymbol _ sx    = fail ("Expected symbol")
+-- | Match a given literal atom, failing otherwise.
+isAtom :: Eq t => t -> SExpr t -> Either String ()
+isAtom s (A s')
+  | s == s'   = return ()
+  | otherwise = Left ".."
+isAtom _ _ = Left ".."
 
-asAssoc :: ([(S t, S t)] -> Either String a) -> S t -> Either String a
+-- | Parse an atom using the provided function.
+asAtom :: (t -> Either String a) -> SExpr t -> Either String a
+asAtom f (A s) = f s
+asAtom _ sx    = Left ("Expected symbol")
+
+-- | Parse an assoc-list using the provided function.
+asAssoc :: ([(SExpr t, SExpr t)] -> Either String a)
+        -> SExpr t -> Either String a
 asAssoc f ss = gatherList ss >>= mapM go >>= f
   where go (a ::: b ::: Nil) = return (a, b)
-        go sx = fail ("Expected two-element list")
+        go sx = Left ("Expected two-element list")
