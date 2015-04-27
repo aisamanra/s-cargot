@@ -106,13 +106,34 @@ number base digits = foldl go 0 <$> many1 digits
           | otherwise = error ("Unknown letter in number: " ++ show c)
 
 pFloat :: Parser Double
-pFloat = fail "???"
+pFloat = do
+  n <- decimal
+  withDot n <|> noDot n
+  where withDot n = do
+          char '.'
+          m <- decimal
+          e <- option 1.0 exponent
+          return ((fromIntegral n + asDec m 0) * e)
+        noDot n = do
+          e <- exponent
+          return (fromIntegral n * e)
+        exponent = do
+          oneOf "eE"
+          s <- power
+          x <- decimal
+          return (10 ** s (fromIntegral x))
+        asDec 0 k = k
+        asDec n k =
+          asDec (n `div` 10) ((fromIntegral (n `rem` 10) + k) * 0.1)
+
+power :: Num a => Parser (a -> a)
+power = negate <$ char '-' <|> id <$ char '+' <|> return id
 
 pInt :: Parser Integer
 pInt = do
-  s <- negate <$ char '-' <|> id <$ char '+' <|> return id
+  s <- power
   n <- pZeroNum <|> decimal
-  return (s n)
+  return (fromIntegral (s n))
 
 pZeroNum :: Parser Integer
 pZeroNum = char '0' >>
@@ -123,9 +144,9 @@ pZeroNum = char '0' >>
   )
 
 pHaskLikeAtom :: Parser HaskLikeAtom
-pHaskLikeAtom =
-      HSInt    <$> (try pInt   <?> "integer")
-  <|> HSFloat  <$> (try pFloat <?> "float")
+pHaskLikeAtom
+   =  HSFloat  <$> (try pFloat <?> "float")
+  <|> HSInt    <$> (try pInt   <?> "integer")
   <|> HSString <$> (pString    <?> "string literal")
   <|> HSIdent  <$> (pToken     <?> "token")
 
