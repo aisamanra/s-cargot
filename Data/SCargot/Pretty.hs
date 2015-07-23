@@ -1,3 +1,6 @@
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Data.SCargot.Pretty where
 
 
@@ -48,11 +51,23 @@ data LayoutOptions a = LayoutOptions
   , maxWidth     :: Maybe Int -- ^ The maximum width (if any)
   }
 
+flatPrint :: (a -> Text) -> LayoutOptions a
+flatPrint printer = LayoutOptions
+  { atomPrinter  = printer
+  , swingIndent  = const True
+  , indentAmount = 2
+  , maxWidth     = Nothing
+  }
+
 basicPrint :: (a -> Text) -> LayoutOptions a
-basicPrint f = LayoutOptions
-  { atomPrinter = f
-  , swingIndent = const False
-  , maxWidth    = Nothing
+basicPrint printer = LayoutOptions
+  { atomPrinter  = printer
+  , swingIndent  = const True
+  , indentAmount = 2
+  , maxWidth     = Just 80
   }
 
 prettyPrintSExpr :: LayoutOptions a -> SExpr a -> Text
+prettyPrintSExpr LayoutOptions { .. } = go 0
+  where go _ SNil = "()"
+        go _ _    = undefined
