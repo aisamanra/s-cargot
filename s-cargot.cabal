@@ -18,12 +18,13 @@ library
                        Data.SCargot.Repr.Rich,
                        Data.SCargot.Repr.WellFormed,
                        Data.SCargot.General,
+                       Data.SCargot.Pretty,
                        Data.SCargot.Basic,
                        Data.SCargot.Comments,
                        Data.SCargot.HaskLike,
                        Data.SCargot.Tutorial
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.7 && <4.8, parsec, text, containers
+  build-depends:       base >=4.7 && <5, parsec, text, containers
   -- hs-source-dirs:
   default-language:    Haskell2010
