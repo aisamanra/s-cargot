@@ -4,6 +4,7 @@
 
 module Data.SCargot.Pretty
          ( LayoutOptions(..)
+         , Indent(..)
          , basicPrint
          , flatPrint
          , prettyPrintSExpr
@@ -14,6 +15,12 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 
 import           Data.SCargot.Repr
+
+data Indent
+  = Swing
+  | SwingAfter Int
+  | Align
+    deriving (Eq, Show)
 
 -- | A 'LayoutOptions' value describes how to pretty-print a 'SExpr'.
 --   It describes how to print atoms, what horizontal space to fit
@@ -56,16 +63,16 @@ import           Data.SCargot.Repr
 --   otherwise, subsequent lines are indented based on the size of the
 --   @car@ of the list.
 data LayoutOptions a = LayoutOptions
-  { atomPrinter  :: a -> Text       -- ^ How to serialize a given atom to 'Text'.
-  , swingIndent  :: SExpr a -> Bool -- ^ Whether or not to swing
-  , indentAmount :: Int             -- ^ How much to indent after a swing
-  , maxWidth     :: Maybe Int       -- ^ The maximum width (if any)
+  { atomPrinter  :: a -> Text         -- ^ How to serialize a given atom to 'Text'.
+  , swingIndent  :: SExpr a -> Indent -- ^ Whether or not to swing
+  , indentAmount :: Int               -- ^ How much to indent after a swing
+  , maxWidth     :: Maybe Int         -- ^ The maximum width (if any)
   }
 
 flatPrint :: (a -> Text) -> LayoutOptions a
 flatPrint printer = LayoutOptions
   { atomPrinter  = printer
-  , swingIndent  = const True
+  , swingIndent  = const Swing
   , indentAmount = 2
   , maxWidth     = Nothing
   }
@@ -73,7 +80,7 @@ flatPrint printer = LayoutOptions
 basicPrint :: (a -> Text) -> LayoutOptions a
 basicPrint printer = LayoutOptions
   { atomPrinter  = printer
-  , swingIndent  = const True
+  , swingIndent  = const Swing
   , indentAmount = 2
   , maxWidth     = Just 80
   }
@@ -113,14 +120,22 @@ prettyPrintSExpr LayoutOptions { .. } = pHead 0
                 lst  = k []
                 flat = T.unwords (map (pHead (ind+1)) lst)
                 headWidth = T.length hd + 1
-                indented
-                  | swingIndent h =
+                indented =
+                  case swingIndent h of
+                    SwingAfter n ->
+                      let (l, ls) = splitAt n lst
+                          t  = T.unwords (map (pHead (ind+1)) l)
+                          ts = indentAll (ind + indentAmount)
+                                 (map (pHead (ind + indentAmount)) ls)
+                      in t <> ts
+                    Swing ->
                       indentAll (ind + indentAmount)
                         (map (pHead (ind + indentAmount)) lst)
-                  | otherwise =
+                    Align ->
                       indentSubsequent (ind + headWidth + 1)
                         (map (pHead (ind + headWidth + 1)) lst)
-                body | length lst == 0                = ""
-                     | Just maxAmt <- maxWidth
-                     , (T.length flat + ind) > maxAmt = " " <> indented
-                     | otherwise                      = " " <> flat
+                body
+                  | length lst == 0                = ""
+                  | Just maxAmt <- maxWidth
+                  , (T.length flat + ind) > maxAmt = " " <> indented
+                  | otherwise                      = " " <> flat
