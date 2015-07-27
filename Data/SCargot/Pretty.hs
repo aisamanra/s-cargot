@@ -3,11 +3,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.SCargot.Pretty
-         ( LayoutOptions(..)
+         ( -- * Pretty-Printing
+           prettyPrintSExpr
+           -- * Pretty-Printing Control
+         , LayoutOptions(..)
          , Indent(..)
+           -- * Default Printing Strategies
          , basicPrint
          , flatPrint
-         , prettyPrintSExpr
          ) where
 
 import           Data.Monoid ((<>))
@@ -16,59 +19,51 @@ import qualified Data.Text as T
 
 import           Data.SCargot.Repr
 
+-- | The 'Indent' type is used to determine how to indent subsequent
+--   s-expressions in a list, after printing the head of the list.
 data Indent
-  = Swing
-  | SwingAfter Int
-  | Align
+  = Swing -- ^ A 'Swing' indent will indent subsequent exprs some fixed
+          --   amount more than the current line.
+          --
+          --   > (foo
+          --   >   bar
+          --   >   baz
+          --   >   quux)
+  | SwingAfter Int -- ^ A 'SwingAfter' @n@ indent will try to print the
+                   --   first @n@ expressions after the head on the same
+                   --   line as the head, and all after will be swung.
+                   --   'SwingAfter' @0@ is equivalent to 'Swing'.
+                   --
+                   --   > (foo bar
+                   --   >   baz
+                   --   >   quux)
+  | Align -- ^ An 'Align' indent will print the first expression after
+          --   the head on the same line, and subsequent expressions will
+          --   be aligned with that one.
+          --
+          --   > (foo bar
+          --   >      baz
+          --   >      quux)
     deriving (Eq, Show)
 
--- | A 'LayoutOptions' value describes how to pretty-print a 'SExpr'.
---   It describes how to print atoms, what horizontal space to fit
---   it into, and other related options.
---
---   The 'swingIndent' value might require a big of explanation: in
---   pretty-printing s-expressions, you have the option of whether
---   to 'swing' expressions which get pushed to subsequent lines
---   to the left, or to align them along the right. e.g. the
---   s-expression @(foo a b)@ could use a non-swing indent as
---
---   > (foo arg-one
---   >      arg-two)
---
---   or a swing indent as
---
---   > (foo arg-one
---   >   arg-two)
---
---   often, in formatting Lisp code, control structures will
---   swing subsequent expressions, as in
---
---   > (define (factorial n)
---   >   (if (= n 0)
---   >     1
---   >     (* n (fact (- n 1)))))
---
---   but most functions will _not_ swing:
---
---   > (call-my-func arg-number-one
---   >               arg-number-two
---   >               arg-number-three)
---
---   The 'swingIndent' field lets you choose whether or not to
---   swing subsequent s-expressions based on the atom in the car
---   position of a list. You can default to always swinging subsequent
---   expressions with @const True@ and never with @const False@, or
---   choose based on some more advanced criteria. _If_ a swing happens,
---   subsequent lines are indented based on the 'indentAmount' variable;
---   otherwise, subsequent lines are indented based on the size of the
---   @car@ of the list.
+-- | A 'LayoutOptions' value describes the strategy taken in
+--   pretty-printing a 'SExpr'.
 data LayoutOptions a = LayoutOptions
-  { atomPrinter  :: a -> Text         -- ^ How to serialize a given atom to 'Text'.
-  , swingIndent  :: SExpr a -> Indent -- ^ Whether or not to swing
-  , indentAmount :: Int               -- ^ How much to indent after a swing
-  , maxWidth     :: Maybe Int         -- ^ The maximum width (if any)
+  { atomPrinter  :: a -> Text
+      -- ^ How to serialize a given atom to 'Text'.
+  , swingIndent  :: SExpr a -> Indent
+      -- ^ How to indent subsequent expressions, as determined by
+      --   the head of the list.
+  , indentAmount :: Int
+      -- ^ How much to indent after a swung indentation.
+  , maxWidth     :: Maybe Int
+      -- ^ The maximum width (if any) If this is 'None' then
+      --   the resulting s-expression will always be printed
+      --   on a single line.
   }
 
+-- | A default 'LayoutOptions' struct that will always print a 'SExpr'
+--   as a single line.
 flatPrint :: (a -> Text) -> LayoutOptions a
 flatPrint printer = LayoutOptions
   { atomPrinter  = printer
@@ -77,6 +72,9 @@ flatPrint printer = LayoutOptions
   , maxWidth     = Nothing
   }
 
+-- | A default 'LayoutOptions' struct that will always swing subsequent
+--   expressions onto later lines if they're too long, indenting them
+--   by two spaces.
 basicPrint :: (a -> Text) -> LayoutOptions a
 basicPrint printer = LayoutOptions
   { atomPrinter  = printer
@@ -108,6 +106,9 @@ indentSubsequent n (t:ts) = joinLines (t : go ts)
 -- i'm sorry to everyone i let down by writing this
 -- i swear i'll do better in the future i promise i have to
 -- for my sake and for everyone's
+
+-- | Pretty-print a 'Sexpr' according to the options in a
+--   'LayoutOptions' value.
 prettyPrintSExpr :: LayoutOptions a -> SExpr a -> Text
 prettyPrintSExpr LayoutOptions { .. } = pHead 0
   where pHead _   SNil         = "()"
