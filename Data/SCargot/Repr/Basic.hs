@@ -21,6 +21,8 @@ module Data.SCargot.Repr.Basic
 import Control.Applicative ((<$>), (<*>), pure)
 import Data.SCargot.Repr as R
 
+infixr 5 :::
+
 -- | A shorter infix alias for `SCons`
 pattern x ::: xs = SCons x xs
 
