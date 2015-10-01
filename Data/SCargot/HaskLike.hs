@@ -14,6 +14,7 @@ import           Text.Parsec.Text (Parser)
 
 import           Prelude hiding (concatMap)
 
+import Data.SCargot.Common
 import Data.SCargot.Repr.Basic (SExpr)
 import Data.SCargot.General (SExprSpec, mkSpec)
 
@@ -22,7 +23,7 @@ import Data.SCargot.General (SExprSpec, mkSpec)
 This module is intended for simple, ad-hoc configuration or data formats
 that might not need their on rich structure but might benefit from a few
 various literal formats. the 'haskLikeSpec' understands identifiers as
-defined by R6RS as well as string, integer, and floating-point literals
+defined by R5RS as well as string, integer, and floating-point literals
 as defined by the Haskell spec, but won't get any Lisp-specific vector
 literals or other structure.
 
@@ -32,7 +33,7 @@ literals or other structure.
 -- | An atom type that understands Haskell-like values as well as
 --   Scheme-like identifiers.
 data HaskLikeAtom
-  = HSIdent  Text  -- ^ An identifier, parsed according to the R6RS Scheme
+  = HSIdent  Text  -- ^ An identifier, parsed according to the R5RS Scheme
                    --   standard
   | HSString Text  -- ^ A string, parsed according to the syntax for string
                    --   literals in the Haskell report
@@ -46,19 +47,6 @@ data HaskLikeAtom
 instance IsString HaskLikeAtom where
   fromString = HSIdent . fromString
 
-pToken :: Parser Text
-pToken =  pack <$> (  (:) <$> initial <*> many subsequent
-                  <|> string "+"
-                  <|> string "-"
-                  <|> string "..."
-                   )
-
-initial :: Parser Char
-initial = letter <|> oneOf "!$%&*/:<=>?^_~"
-
-subsequent :: Parser Char
-subsequent = initial <|> digit <|> oneOf "+-.@"
-
 pString :: Parser Text
 pString = pack . catMaybes <$> between (char '"') (char '"') (many (val <|> esc))
   where val = Just <$> satisfy (\ c -> c /= '"' && c /= '\\' && c > '\026')
@@ -69,8 +57,8 @@ pString = pack . catMaybes <$> between (char '"') (char '"') (many (val <|> esc)
         code = eEsc <|> eNum <|> eCtrl <|> eAscii
         eCtrl  = char '^' >> unCtrl <$> upper
         eNum   = (toEnum . fromInteger) <$>
-                   (decimal <|> (char 'o' >> number 8 octDigit)
-                            <|> (char 'x' >> number 16 hexDigit))
+                   (decNumber <|> (char 'o' >> octNumber)
+                              <|> (char 'x' >> hexNumber))
         eEsc   = choice [ char a >> return b | (a, b) <- escMap ]
         eAscii = choice [ try (string a >> return b)
                         | (a, b) <- asciiMap ]
@@ -89,29 +77,13 @@ asciiMap = zip
    "\STX\ETX\EOT\ENQ\ACK\BEL\DLE\DC1\DC2\DC3\DC4\NAK" ++
    "\SYN\ETB\CAN\SUB\ESC\DEL")
 
-decimal :: Parser Integer
-decimal = number 10 digit
-
-number :: Integer -> Parser Char -> Parser Integer
-number base digits = foldl go 0 <$> many1 digits
-  where go x d = base * x + toInteger (value d)
-        value c
-          | c == 'a' || c == 'A' = 0xa
-          | c == 'b' || c == 'B' = 0xb
-          | c == 'c' || c == 'C' = 0xc
-          | c == 'd' || c == 'D' = 0xd
-          | c == 'e' || c == 'E' = 0xe
-          | c == 'f' || c == 'F' = 0xf
-          | c >= '0' && c <= '9' = fromEnum c - fromEnum '0'
-          | otherwise = error ("Unknown letter in number: " ++ show c)
-
 pFloat :: Parser Double
 pFloat = do
-  n <- decimal
+  n <- decNumber
   withDot n <|> noDot n
   where withDot n = do
           char '.'
-          m <- decimal
+          m <- decNumber
           e <- option 1.0 exponent
           return ((fromIntegral n + asDec m 0) * e)
         noDot n = do
@@ -120,7 +92,7 @@ pFloat = do
         exponent = do
           oneOf "eE"
           s <- power
-          x <- decimal
+          x <- decNumber
           return (10 ** s (fromIntegral x))
         asDec 0 k = k
         asDec n k =
@@ -132,23 +104,23 @@ power = negate <$ char '-' <|> id <$ char '+' <|> return id
 pInt :: Parser Integer
 pInt = do
   s <- power
-  n <- pZeroNum <|> decimal
+  n <- pZeroNum <|> decNumber
   return (fromIntegral (s n))
 
 pZeroNum :: Parser Integer
 pZeroNum = char '0' >>
-  (  (oneOf "xX" >> number 16 hexDigit)
- <|> (oneOf "oO" >> number 8 octDigit)
- <|> decimal
+  (  (oneOf "xX" >> hexNumber)
+ <|> (oneOf "oO" >> octNumber)
+ <|> decNumber
  <|> return 0
   )
 
 pHaskLikeAtom :: Parser HaskLikeAtom
 pHaskLikeAtom
-   =  HSFloat  <$> (try pFloat <?> "float")
-  <|> HSInt    <$> (try pInt   <?> "integer")
-  <|> HSString <$> (pString    <?> "string literal")
-  <|> HSIdent  <$> (pToken     <?> "token")
+   =  HSFloat   <$> (try pFloat     <?> "float")
+  <|> HSInt     <$> (try pInt       <?> "integer")
+  <|> HSString  <$> (pString        <?> "string literal")
+  <|> HSIdent   <$> (parseR5RSIdent <?> "token")
 
 sHaskLikeAtom :: HaskLikeAtom -> Text
 sHaskLikeAtom (HSIdent t)  = t

@@ -92,10 +92,12 @@ indent :: Int -> Text -> Text
 indent n ts = T.replicate n " " <> ts
 
 -- Indents every line n spaces, and adds a newline to the beginning
+-- used in swung indents
 indentAll :: Int -> [Text] -> Text
 indentAll n = ("\n" <>) . joinLines . map (indent n)
 
 -- Indents every line but the first by some amount
+-- used in aligned indents
 indentSubsequent :: Int -> [Text] -> Text
 indentSubsequent _ [] = ""
 indentSubsequent _ [t] = t
@@ -107,7 +109,7 @@ indentSubsequent n (t:ts) = joinLines (t : go ts)
 -- i swear i'll do better in the future i promise i have to
 -- for my sake and for everyone's
 
--- | Pretty-print a 'Sexpr' according to the options in a
+-- | Pretty-print a 'SExpr' according to the options in a
 --   'LayoutOptions' value.
 prettyPrintSExpr :: LayoutOptions a -> SExpr a -> Text
 prettyPrintSExpr LayoutOptions { .. } = pHead 0
@@ -136,7 +138,7 @@ prettyPrintSExpr LayoutOptions { .. } = pHead 0
                       indentSubsequent (ind + headWidth + 1)
                         (map (pHead (ind + headWidth + 1)) lst)
                 body
-                  | length lst == 0                = ""
+                  | length lst == 0              = ""
                   | Just maxAmt <- maxWidth
-                  , (T.length flat + ind) > maxAmt = " " <> indented
-                  | otherwise                      = " " <> flat
+                  , T.length flat + ind > maxAmt = " " <> indented
+                  | otherwise                    = " " <> flat
