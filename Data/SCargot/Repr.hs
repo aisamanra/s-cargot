@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Data.SCargot.Repr
        ( -- * Elementary SExpr representation
@@ -13,7 +14,8 @@ module Data.SCargot.Repr
        , fromWellFormed
        ) where
 
-import Data.String (IsString(..))
+--import Data.String (IsString(..))
+import GHC.Exts (IsList(..), IsString(..))
 
 -- | All S-Expressions can be understood as a sequence
 --   of @cons@ cells (represented here by 'SCons'), the
@@ -28,7 +30,12 @@ data SExpr atom
 instance IsString atom => IsString (SExpr atom) where
   fromString = SAtom . fromString
 
--- | Sometimes, the cons-based interface is too low
+instance IsList (SExpr atom) where
+  type Item (SExpr atom) = SExpr atom
+  fromList = foldr SCons SNil
+  toList   = undefined
+
+-- | sometimes, the cons-based interface is too low
 --   level, and we'd rather have the lists themselves
 --   exposed. In this case, we have 'RSList' to
 --   represent a well-formed cons list, and 'RSDotted'
@@ -47,6 +54,13 @@ data RichSExpr atom
 
 instance IsString atom => IsString (RichSExpr atom) where
   fromString = RSAtom . fromString
+
+instance IsList (RichSExpr atom) where
+  type Item (RichSExpr atom) = RichSExpr atom
+  fromList = RSList
+  toList (RSList xs)   = xs
+  toList (RSDotted {}) = error "Unable to turn dotted list into haskell list"
+  toList (RSAtom {})   = error "Unable to turn atom into Haskell list"
 
 -- |  It should always be true that
 --
@@ -77,6 +91,12 @@ data WellFormedSExpr atom
   = WFSList [WellFormedSExpr atom]
   | WFSAtom atom
     deriving (Eq, Show, Read, Functor)
+
+instance IsList (WellFormedSExpr atom) where
+  type Item (WellFormedSExpr atom) = WellFormedSExpr atom
+  fromList = WFSList
+  toList (WFSList xs) = xs
+  toList (WFSAtom {}) = error "Unable to turn atom into Haskell list"
 
 instance IsString atom => IsString (WellFormedSExpr atom) where
   fromString = WFSAtom . fromString

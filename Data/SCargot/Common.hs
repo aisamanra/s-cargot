@@ -16,6 +16,12 @@ import           Text.Parsec
 import           Text.Parsec.Char (satisfy)
 import           Text.Parsec.Text (Parser)
 
+-- | Parse an identifier according to the R5RS Scheme standard. This
+--   will not normalize case, even though the R5RS standard specifies
+--   that all identifiers be normalized to lower case first.
+--
+--   An R5RS identifier is, broadly speaking, alphabetic or numeric
+--   and may include various symbols, but no escapes.
 parseR5RSIdent :: Parser Text
 parseR5RSIdent =
   T.pack <$> ((:) <$> initial <*> many subsequent <|> peculiar)
@@ -26,6 +32,11 @@ parseR5RSIdent =
 hasCategory :: Char -> [GeneralCategory] -> Bool
 hasCategory c cs = generalCategory c `elem` cs
 
+-- | Parse an identifier according to the R6RS Scheme standard. An
+--   R6RS identifier may include inline hexadecimal escape sequences
+--   so that, for example, 'foo' is equivalent to 'f\x6f;o', and is
+--   more liberal than R5RS as to which Unicode characters it may
+--   accept.
 parseR6RSIdent :: Parser Text
 parseR6RSIdent =
   T.pack <$> ((:) <$> initial <*> many subsequent <|> peculiar)
@@ -54,6 +65,12 @@ parseR6RSIdent =
         uniClass :: (Char -> Bool) -> Parser Char
         uniClass sp = satisfy (\ c -> c > '\x7f' && sp c)
 
+-- | Parse an identifier according to the R7RS Scheme standard. An
+--   R7RS identifier, in addition to a typical identifier format,
+--   can also be a chunk of text surrounded by vertical bars that
+--   can contain spaces and other characters. Unlike R6RS, it does
+--   not allow escapes to be included in identifiers that are not
+--   surrounded by vertical bars.
 parseR7RSIdent :: Parser Text
 parseR7RSIdent =  T.pack <$>
           (  (:) <$> initial <*> many subsequent
