@@ -45,7 +45,14 @@ import           Text.Parsec ( (<|>)
 import           Text.Parsec.Char (anyChar, space)
 import           Text.Parsec.Text (Parser)
 
-import           Data.SCargot.Repr
+import           Data.SCargot.Repr ( SExpr(..)
+                                   , RichSExpr
+                                   , WellFormedSExpr
+                                   , fromRich
+                                   , toRich
+                                   , fromWellFormed
+                                   , toWellFormed
+                                   )
 
 type ReaderMacroMap atom = Map Char (Reader atom)
 

@@ -21,8 +21,8 @@ library
                        Data.SCargot.Pretty,
                        Data.SCargot.Basic,
                        Data.SCargot.Comments,
-                       Data.SCargot.HaskLike,
-                       Data.SCargot.Tutorial
+                       Data.SCargot.Common,
+                       Data.SCargot.HaskLike
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.7 && <5, parsec, text, containers

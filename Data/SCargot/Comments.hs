@@ -1,20 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Data.SCargot.Comments
-  ( -- * Comment Syntax
-    -- $intro
-    -- * Lisp Comments
+  ( -- $intro
+
+    -- * Lisp-Style Syntax
+    -- $lisp
     withLispComments
     -- * Other Existing Comment Syntaxes
     -- ** Scripting Language Syntax
     -- $script
   , withOctothorpeComments
-    -- ** C-Like Syntax
+    -- ** C-Style Syntax
     -- $clike
   , withCLikeLineComments
   , withCLikeBlockComments
   , withCLikeComments
-    -- ** Haskell Syntax
+    -- ** Haskell-Style Syntax
     -- $haskell
   , withHaskellLineComments
   , withHaskellBlockComments
@@ -144,6 +145,12 @@ comment syntaxes:
 > > decode myCLikeSpec "(foo /* a c-like\n   comment */ bar)\n"
 > Right [WFSList [WFSAtom "foo", WFSAtom "bar"]]
 
+-}
+
+{- $lisp
+> (one   ; a comment
+>   two  ; another one
+>   three)
 -}
 
 {- $script
