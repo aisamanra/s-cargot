@@ -82,8 +82,27 @@ parseR7RSIdent =  T.pack <$>
         subsequent = initial <|> digit <|> specSubsequent
         specSubsequent = expSign <|> oneOf ".@"
         expSign = oneOf "+-"
-        symbolElement = undefined
-        peculiar = undefined
+        symbolElement =  noneOf "\\|"
+                     <|> hexEscape
+                     <|> mnemEscape
+                     <|> ('|' <$ string "\\|")
+        hexEscape = chr . fromIntegral <$> (string "\\x" *> hexNumber <* char ';')
+        mnemEscape =  '\a' <$ string "\\a"
+                  <|> '\b' <$ string "\\b"
+                  <|> '\t' <$ string "\\t"
+                  <|> '\n' <$ string "\\n"
+                  <|> '\r' <$ string "\\r"
+        peculiar =  (:[]) <$> expSign
+                <|> cons2 <$> expSign <*> signSub <*> many subsequent
+                <|> cons3 <$> expSign
+                          <*> char '.'
+                          <*> dotSub
+                          <*> many subsequent
+                <|> cons2 <$> char '.' <*> dotSub <*> many subsequent
+        dotSub = signSub <|> char '.'
+        signSub = initial <|> expSign <|> char '@'
+        cons2 a b cs   = a : b : cs
+        cons3 a b c ds = a : b : c : ds
 
 -- | A helper function for defining parsers for arbitrary-base integers.
 --   The first argument will be the base, and the second will be the
