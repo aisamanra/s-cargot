@@ -1,15 +1,21 @@
 name:                s-cargot
 version:             0.1.0.0
--- synopsis:            
--- description:         
+synopsis:            A flexible, extensible s-expression library.
+description:         S-Cargot is a library for working with s-expressions in
+                     a modular and extensible way, opting for genericity and
+                     flexibility instead of speed. Instead of understanding
+                     one particular form of s-expression, the S-Cargot library
+                     exposes tools for parsing or emitting different kinds of
+                     s-expressions, including features not normally included
+                     in an s-expression library like reader macros or tight
+                     control over indentation in pretty-printing.
 license:             BSD3
 license-file:        LICENSE
 author:              Getty Ritter
-maintainer:          gdritter@galois.com
--- copyright:           
+maintainer:          gettyritter@gmail.com
+copyright:           2015 Getty Ritter
 category:            Data
 build-type:          Simple
--- extra-source-files:  
 cabal-version:       >=1.10
 
 library
@@ -23,8 +29,8 @@ library
                        Data.SCargot.Comments,
                        Data.SCargot.Common,
                        Data.SCargot.HaskLike
-  -- other-modules:
-  -- other-extensions:
-  build-depends:       base >=4.7 && <5, parsec, text, containers
-  -- hs-source-dirs:
+  build-depends:       base >=4.7 && <5,
+                       parsec,
+                       text,
+                       containers
   default-language:    Haskell2010
