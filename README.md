@@ -4,12 +4,6 @@ S-expressions often understand subtly different variations on what an
 S-expression is. The goal of S-Cargot is to create several reusable
 components that can be repurposed to nearly any S-expression variant.
 
-Additionally, S-Cargot uses these to include out-of-the-box parsing and
-processing for several existing variations on S-expressions, including
-Common Lisp (**in progresss**), Scheme (**in progress**), the
-[Rivest internet-draft](http://people.csail.mit.edu/rivest/Sexp.txt)
-(**in progress**), and Clojure (**in progress**).
-
 S-Cargot does _not_ aim to be the fastest or most efficient
 s-expression library. If you need speed, then it would probably be
 best to roll your own [AttoParsec]() parser.
