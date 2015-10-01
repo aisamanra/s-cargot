@@ -1,4 +1,7 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Data.SCargot.Repr
@@ -14,9 +17,11 @@ module Data.SCargot.Repr
        , fromWellFormed
        ) where
 
+import Data.Data (Data)
 import Data.Foldable (Foldable(..))
 import Data.Monoid (Monoid(..), (<>))
 import Data.Traversable (Traversable(..))
+import Data.Typeable (Typeable)
 import GHC.Exts (IsList(..), IsString(..))
 
 -- | All S-Expressions can be understood as a sequence
@@ -27,7 +32,7 @@ data SExpr atom
   = SCons (SExpr atom) (SExpr atom)
   | SAtom atom
   | SNil
-    deriving (Eq, Show, Read, Functor, Data)
+    deriving (Eq, Show, Read, Functor, Data, Typeable, Foldable, Traversable)
 
 instance IsString atom => IsString (SExpr atom) where
   fromString = SAtom . fromString
@@ -39,16 +44,6 @@ instance IsList (SExpr atom) where
     where go (SCons x xs) = x : go xs
           go SNil         = []
           go (SAtom {})   = error "Unable to turn atom into list"
-
-instance Foldable SExpr where
-  foldMap _ SNil        = mempty
-  foldMap f (SAtom a)   = f a
-  foldMap f (SCons x y) = foldMap f x <> foldMap f y
-
-instance Traversable SExpr where
-  traverse f SNil        = pure SNil
-  traverse f (SAtom a)   = SAtom <$> f a
-  traverse f (SCons x y) = SCons <$> traverse f x <*> traverse f y
 
 -- | Sometimes the cons-based interface is too low
 --   level, and we'd rather have the lists themselves
@@ -65,7 +60,7 @@ data RichSExpr atom
   = RSList [RichSExpr atom]
   | RSDotted [RichSExpr atom] atom
   | RSAtom atom
-    deriving (Eq, Show, Read, Functor)
+    deriving (Eq, Show, Read, Functor, Data, Typeable, Foldable, Traversable)
 
 instance IsString atom => IsString (RichSExpr atom) where
   fromString = RSAtom . fromString
@@ -97,17 +92,6 @@ fromRich (RSAtom a) = SAtom a
 fromRich (RSList xs) = foldr SCons SNil (map fromRich xs)
 fromRich (RSDotted xs x) = foldr SCons (SAtom x) (map fromRich xs)
 
-instance Foldable RichSExpr where
-  foldMap f (RSAtom a)      = f a
-  foldMap f (RSList xs)     = mconcat $ map (foldMap f) xs
-  foldMap f (RSDotted xs y) = mconcat (map (foldMap f) xs) <> f y
-
-instance Traversable RichSExpr where
-  traverse f (RSAtom a)      = RSAtom <$> f a
-  traverse f (RSList xs)     = RSList <$> sequenceA (map (traverse f) xs)
-  traverse f (RSDotted xs y) = RSDotted <$> sequenceA (map (traverse f) xs)
-                                        <*> f y
-
 -- | A well-formed s-expression is one which does not
 --   contain any dotted lists. This means that not
 --   every value of @SExpr a@ can be converted to a
@@ -116,7 +100,7 @@ instance Traversable RichSExpr where
 data WellFormedSExpr atom
   = WFSList [WellFormedSExpr atom]
   | WFSAtom atom
-    deriving (Eq, Show, Read, Functor)
+    deriving (Eq, Show, Read, Functor, Data, Typeable, Foldable, Traversable)
 
 instance IsList (WellFormedSExpr atom) where
   type Item (WellFormedSExpr atom) = WellFormedSExpr atom
@@ -126,14 +110,6 @@ instance IsList (WellFormedSExpr atom) where
 
 instance IsString atom => IsString (WellFormedSExpr atom) where
   fromString = WFSAtom . fromString
-
-instance Foldable WellFormedSExpr where
-  foldMap f (WFSAtom a)  = f a
-  foldMap f (WFSList xs) = mconcat $ map (foldMap f) xs
-
-instance Traversable WellFormedSExpr where
-  traverse f (WFSAtom a)  = WFSAtom <$> f a
-  traverse f (WFSList xs) = WFSList <$> sequenceA (map (traverse f) xs)
 
 -- | This will be @Nothing@ if the argument contains an
 --   improper list. It should hold that
