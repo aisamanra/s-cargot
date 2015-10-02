@@ -19,7 +19,8 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Data.SCargot.Repr,
+  exposed-modules:     Data.SCargot,
+                       Data.SCargot.Repr,
                        Data.SCargot.Repr.Basic,
                        Data.SCargot.Repr.Rich,
                        Data.SCargot.Repr.WellFormed,
