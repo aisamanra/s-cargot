@@ -21,6 +21,7 @@ module Data.SCargot.Repr.Rich
        , asPair
        , asList
        , isAtom
+       , isNil
        , asAtom
        , asAssoc
        ) where
@@ -29,6 +30,9 @@ import Control.Applicative ((<$>), (<*>), pure)
 import Data.SCargot.Repr as R
 
 -- | A traversal with access to the first element of a pair.
+--
+-- >>> set _car (A "elephant") (L [A "one", A "two", A "three"])
+-- L [A "elelphant",A "two",A "three"]
 _car :: Applicative f => (RichSExpr a -> f (RichSExpr a)) -> RichSExpr a -> f (RichSExpr a)
 _car f (L (x:xs))    = (\ x -> L (x:xs)) `fmap` f x
 _car f (DL (x:xs) a) = (\ x -> DL (x:xs) a) `fmap` f x
@@ -36,6 +40,9 @@ _car _ (A a)         = pure (A a)
 _car _ Nil           = pure Nil
 
 -- | A traversal with access to the second element of a pair.
+--
+-- >>> set _car (A "elephant") (L [A "one", A "two", A "three"])
+-- DL [A "one"] "elephant"
 _cdr :: Applicative f => (RichSExpr a -> f (RichSExpr a)) -> RichSExpr a -> f (RichSExpr a)
 _cdr f (L (x:xs)) =
   let go Nil     = L [x]
@@ -68,48 +75,98 @@ pattern L xs      = R.RSList xs
 -- | A shorter alias for `RSDotted`
 pattern DL xs x = R.RSDotted xs x
 
--- | A shorter alias for `RSList []`
+-- | A shorter alias for `RSList` @[]@
 pattern Nil = R.RSList []
 
--- | Utility function for parsing a pair of things.
+-- | Utility function for parsing a pair of things: this parses a two-element list,
+--   and not a cons pair.
+--
+-- >>> fromPair (isAtom "pachy") (asAtom return) (L [A "pachy", A "derm"])
+-- Right ((), "derm")
+-- >>> fromPair (isAtom "pachy") fromAtom (L [A "pachy"])
+-- Left "Expected two-element list"
 fromPair :: (RichSExpr t -> Either String a)
          -> (RichSExpr t -> Either String b)
          -> RichSExpr t -> Either String (a, b)
 fromPair pl pr = asPair $ \(l,r) -> (,) <$> pl l <*> pr r
 
--- | Utility function for parsing a list of things.
+-- | Utility function for parsing a proper list of things.
+--
+-- >>> fromList fromAtom (L [A "this", A "that", A "the-other"])
+-- Right ["this","that","the-other"]
+-- >>> fromList fromAtom (DL [A "this", A "that"] "the-other"])
+-- Left "asList: expected proper list; found dotted list"
 fromList :: (RichSExpr t -> Either String a) -> RichSExpr t -> Either String [a]
 fromList p = asList $ \ss -> mapM p ss
 
 -- | Utility function for parsing a single atom
+--
+-- >>> fromAtom (A "elephant")
+-- Right "elephant"
+-- >>> fromAtom (L [A "elephant"])
+-- Left "fromAtom: expected atom; found list"
 fromAtom :: RichSExpr t -> Either String t
-fromAtom (L _) = Left "Expected atom; found list"
-fromAtom (A a) = return a
+fromAtom (L _)    = Left "fromAtom: expected atom; found list"
+fromAtom (DL _ _) = Left "fromAtom: expected atom; found dotted list"
+fromAtom (A a)    = return a
 
--- | RichSExpr a -> Either String two-element list (NOT a dotted pair) using the
---   provided function.
+-- | Parses a two -element list using the provided function.
+--
+-- >>> let go (A l) (A r) = return (l ++ r); go _ _ = Left "expected atoms"
+-- >>> asPair go (L [A "pachy", A "derm"])
+-- Right "pachyderm"
+-- >>> asPair go (L [A "elephant"])
+-- Left "asPair: expected two-element list; found list of length 1"
 asPair :: ((RichSExpr t, RichSExpr t) -> Either String a)
        -> RichSExpr t -> Either String a
 asPair f (L [l, r]) = f (l, r)
-asPair _ sx         = Left ("Expected two-element list")
+asPair _ (L ls)     = Left ("asPair: expected two-element list; found list of lenght " ++ show (length ls))
+asPair _ DL {}      = Left ("asPair: expected two-element list; found dotted list")
+asPair _ A {}       = Left ("asPair: expected two-element list; found atom")
 
 -- | Parse an arbitrary-length list using the provided function.
 asList :: ([RichSExpr t] -> Either String a)
        -> RichSExpr t -> Either String a
 asList f (L ls) = f ls
-asList _ sx     = Left ("Expected list")
+asList _ DL {}  = Left ("asList: expected list; found dotted list")
+asList _ A { }  = Left ("asList: expected list; found dotted list")
 
 -- | Match a given literal atom, failing otherwise.
+--
+-- >>> isAtom "elephant" (A "elephant")
+-- Right ()
+-- >>> isAtom "elephant" (L [A "elephant"])
+-- Left "isAtom: expected atom; found list"
 isAtom :: Eq t => t -> RichSExpr t -> Either String ()
 isAtom s (A s')
   | s == s'   = return ()
-  | otherwise = Left ".."
-isAtom _ _  = Left ".."
+  | otherwise = Left "isAtom: failed to match atom"
+isAtom _ L {}  = Left "isAtom: expected atom; found list"
+isAtom _ DL {} = Left "isAtom: expected atom; found dotted list"
+
+-- | Match an empty list, failing otherwise.
+--
+-- >>> isNil (L [])
+-- Right ()
+-- >>> isNil (A "elephant")
+-- Left "isNil: expected nil; found atom"
+isNil :: RichSExpr t -> Either String ()
+isNil Nil   = return ()
+isNil L {}  = Left "isNil: expected nil; found non-nil list"
+isNil DL {} = Left "isNil: expected nil; found dotted list"
+isNil A {}  = Left "isNil: expected nil; found atom"
 
 -- | Parse an atom using the provided function.
+--
+-- >>> import Data.Char (toUpper)
+-- >>> asAtom (return . map toUpper) (A "elephant")
+-- Right "ELEPHANT"
+-- >>> asAtom (return . map toUpper) (L [])
+-- Left "asAtom: expected atom; found list"
 asAtom :: (t -> Either String a) -> RichSExpr t -> Either String a
 asAtom f (A s) = f s
-asAtom _ sx    = Left ("Expected atom; got list")
+asAtom _ L {}  = Left ("asAtom: expected atom; found list")
+asAtom _ DL {} = Left ("asAtom: expected atom; found dotted list")
 
 -- | Parse an assoc-list using the provided function.
 asAssoc :: Show t => ([(RichSExpr t, RichSExpr t)] -> Either String a)
