@@ -25,12 +25,24 @@ import Control.Applicative ((<$>), (<*>), pure)
 import Data.SCargot.Repr as R
 
 -- | A traversal with access to the first element of a pair.
+--
+-- >>> import Lens.Family
+-- >>> set _car (A "elephant") (A "one" ::: A "two" ::: A "three" ::: Nil)
+-- A "elelphant" ::: A "two" ::: A "three" ::: Nil
+-- >>> set _car (A "two" ::: A "three" ::: Nil) (A "one" ::: A "elephant")
+-- (A "two" ::: A "three" ::: Nil) ::: A "elephant"
 _car :: Applicative f => (SExpr a -> f (SExpr a)) -> SExpr a -> f (SExpr a)
 _car f (x ::: xs) = (:::) <$> f x <*> pure xs
 _car _ (A a)      = pure (A a)
 _car _ Nil        = pure Nil
 
 -- | A traversal with access to the second element of a pair.
+--
+-- >>> import Lens.Family
+-- >>> set _cdr (A "elephant") (A "one" ::: A "two" ::: A "three" ::: Nil)
+-- A "one" ::: A "elephant"
+-- >>> set _cdr (A "two" ::: A "three" ::: Nil) (A "one" ::: A "elephant")
+-- A "one" ::: A "two" ::: A "three" ::: Nil
 _cdr :: Applicative f => (SExpr a -> f (SExpr a)) -> SExpr a -> f (SExpr a)
 _cdr f (x ::: xs) = (:::) <$> pure x <*> f xs
 _cdr _ (A a)      = pure (A a)
@@ -47,55 +59,97 @@ pattern A x = SAtom x
 -- | A (slightly) shorter alias for `SNil`
 pattern Nil = SNil
 
+getShape :: SExpr a -> String
+getShape Nil = "empty list"
+getShape sx = go 0 sx
+  where go n Nil      = "list of length " ++ show n
+        go n A {}     = "dotted list of length " ++ show n
+        go n (_:::xs) = go (n+1) xs
+
 -- | Utility function for parsing a pair of things.
+--
+-- >>> fromPair (isAtom "pachy") (asAtom return) (A "pachy" ::: A "derm" ::: Nil)
+-- Right ((), "derm")
+-- >>> fromPair (isAtom "pachy") fromAtom (A "pachy" ::: Nil)
+-- Left "Expected two-element list"
 fromPair :: (SExpr t -> Either String a)
          -> (SExpr t -> Either String b)
          -> SExpr t -> Either String (a, b)
 fromPair pl pr (l ::: r ::: Nil) = (,) <$> pl l <*> pr r
-fromPair _  _  sx = Left ("Expected two-element list")
+fromPair _  _  sx = Left ("fromPair: expected two-element list; found " ++ getShape sx)
 
 -- | Utility function for parsing a list of things.
 fromList :: (SExpr t -> Either String a) -> SExpr t -> Either String [a]
 fromList p (s ::: ss) = (:) <$> p s <*> fromList p ss
 fromList p Nil        = pure []
-fromList _ sx         = Left ("Expected list")
+fromList _ sx         = Left ("fromList: expected list; found " ++ getShape sx)
 
 -- | Utility function for parsing a single atom
 fromAtom :: SExpr t -> Either String t
 fromAtom (A a) = return a
-fromAtom _     = Left "Expected atom; found list"
+fromAtom sx    = Left ("fromAtom: expected atom; found list" ++ getShape sx)
 
 gatherList :: SExpr t -> Either String [SExpr t]
 gatherList (x ::: xs) = (:) <$> pure x <*> gatherList xs
 gatherList Nil        = pure []
-gatherList sx         = Left ("Expected list")
+gatherList sx         = Left ("gatherList: expected list; found " ++ getShape sx)
 
 -- | Parse a two-element list (NOT a dotted pair) using the
 --   provided function.
+--
+-- >>> let go (A l) (A r) = return (l ++ r); go _ _ = Left "expected atoms"
+-- >>> asPair go (A "pachy" ::: A "derm" ::: Nil)
+-- Right "pachyderm"
+-- >>> asPair go (A "elephant" ::: Nil)
+-- Left "asPair: expected two-element list; found list of length 1"
 asPair :: ((SExpr t, SExpr t) -> Either String a)
        -> SExpr t -> Either String a
 asPair f (l ::: r ::: SNil) = f (l, r)
-asPair _ sx = Left ("Expected two-element list")
+asPair _ sx = Left ("asPair: expected two-element list; found " ++ getShape sx)
 
 -- | Parse an arbitrary-length list using the provided function.
+--
+-- >>> let go xs = concat <$> mapM fromAtom xs
+-- >>> asList go (A "el" ::: A "eph" ::: A "ant" ::: Nil)
+-- Right "elephant"
+-- >>> asList go (A "el" ::: A "eph" ::: A "ant")
+-- Left "asList: expected list; found dotted list of length 3"
 asList :: ([SExpr t] -> Either String a) -> SExpr t -> Either String a
 asList f ls = gatherList ls >>= f
 
 -- | Match a given literal atom, failing otherwise.
+--
+-- >>> isAtom "elephant" (A "elephant")
+-- Right ()
+-- >>> isAtom "elephant" (A "elephant" ::: Nil)
+-- Left "isAtom: expected atom; found list"
 isAtom :: Eq t => t -> SExpr t -> Either String ()
 isAtom s (A s')
   | s == s'   = return ()
-  | otherwise = Left ".."
-isAtom _ _ = Left ".."
+  | otherwise = Left "isAtom: failed to match atom"
+isAtom _ sx = Left ("isAtom: expected atom; found " ++ getShape sx)
 
 -- | Parse an atom using the provided function.
+--
+-- >>> import Data.Char (toUpper)
+-- >>> asAtom (return . map toUpper) (A "elephant")
+-- Right "ELEPHANT"
+-- >>> asAtom (return . map toUpper) Nil
+-- Left "asAtom: expected atom; found empty list"
 asAtom :: (t -> Either String a) -> SExpr t -> Either String a
 asAtom f (A s) = f s
-asAtom _ sx    = Left ("Expected symbol")
+asAtom _ sx    = Left ("asAtom: expected atom; found " ++ getShape sx)
 
 -- | Parse an assoc-list using the provided function.
+--
+-- >>> let def (x, y) = do { a <- fromAtom x; b <- fromAtom y; return (a ++ ": " ++ b) }
+-- >>> let defList xs = do { defs <- mapM def xs; return (unlines defs) }
+-- >>> asAssoc defList ((A "legs" ::: A "four" ::: Nil) ::: (A "trunk" ::: A "one" ::: Nil) ::: Nil)
+-- Right "legs: four\ntrunk: one\n"
+-- >>> asAssoc defList ((A "legs" ::: A "four" ::: Nil) ::: (A "elephant") ::: Nil)
+-- Left "asAssoc: expected pair; found list of length 1"
 asAssoc :: ([(SExpr t, SExpr t)] -> Either String a)
         -> SExpr t -> Either String a
 asAssoc f ss = gatherList ss >>= mapM go >>= f
   where go (a ::: b ::: Nil) = return (a, b)
-        go sx = Left ("Expected two-element list")
+        go sx = Left ("asAssoc: expected pair; found " ++ getShape sx)

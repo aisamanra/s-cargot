@@ -31,18 +31,27 @@ import Data.SCargot.Repr as R
 
 -- | A traversal with access to the first element of a pair.
 --
+-- >>> import Lens.Family
 -- >>> set _car (A "elephant") (L [A "one", A "two", A "three"])
 -- L [A "elelphant",A "two",A "three"]
+-- >>> set _car (L [A "two", A "three"]) (DL [A "one"] "elephant")
+-- DL [L[A "two",A "three"]] "elephant"
 _car :: Applicative f => (RichSExpr a -> f (RichSExpr a)) -> RichSExpr a -> f (RichSExpr a)
 _car f (L (x:xs))    = (\ x -> L (x:xs)) `fmap` f x
 _car f (DL (x:xs) a) = (\ x -> DL (x:xs) a) `fmap` f x
 _car _ (A a)         = pure (A a)
 _car _ Nil           = pure Nil
 
--- | A traversal with access to the second element of a pair.
+-- | A traversal with access to the second element of a pair. Using
+--   this to modify an s-expression may result in changing the
+--   constructor used, changing a list to a dotted list or vice
+--   versa.
 --
--- >>> set _car (A "elephant") (L [A "one", A "two", A "three"])
+-- >>> import Lens.Family
+-- >>> set _cdr (A "elephant") (L [A "one", A "two", A "three"])
 -- DL [A "one"] "elephant"
+-- >>> set _cdr (L [A "two", A "three"]) (DL [A "one"] "elephant")
+-- L [A "one",A "two",A "three"]
 _cdr :: Applicative f => (RichSExpr a -> f (RichSExpr a)) -> RichSExpr a -> f (RichSExpr a)
 _cdr f (L (x:xs)) =
   let go Nil     = L [x]
@@ -125,6 +134,12 @@ asPair _ DL {}      = Left ("asPair: expected two-element list; found dotted lis
 asPair _ A {}       = Left ("asPair: expected two-element list; found atom")
 
 -- | Parse an arbitrary-length list using the provided function.
+--
+-- >>> let go xs = concat <$> mapM fromAtom xs
+-- >>> asList go (L [A "el", A "eph", A "ant"])
+-- Right "elephant"
+-- >>> asList go (DL [A "el", A "eph"] "ant")
+-- Left "asList: expected list; found dotted list"
 asList :: ([RichSExpr t] -> Either String a)
        -> RichSExpr t -> Either String a
 asList f (L ls) = f ls
@@ -169,13 +184,23 @@ asAtom _ L {}  = Left ("asAtom: expected atom; found list")
 asAtom _ DL {} = Left ("asAtom: expected atom; found dotted list")
 
 -- | Parse an assoc-list using the provided function.
-asAssoc :: Show t => ([(RichSExpr t, RichSExpr t)] -> Either String a)
+--
+-- >>> let def (x, y) = do { a <- fromAtom x; b <- fromAtom y; return (a ++ ": " ++ b) }
+-- >>> let defList xs = do { defs <- mapM def xs; return (unlines defs) }
+-- >>> asAssoc defList (L [ L [A "legs", A "four"], L [ A "trunk", A "one"] ])
+-- Right "legs: four\ntrunk: one\n"
+-- >>> asAssoc defList (L [ L [A "legs", A "four"], L [ A "elephant"] ])
+-- Left "asAssoc: expected pair; found list of length 1"
+asAssoc :: ([(RichSExpr t, RichSExpr t)] -> Either String a)
         -> RichSExpr t -> Either String a
 asAssoc f (L ss) = gatherPairs ss >>= f
   where gatherPairs (L [a, b] : ss) = (:) <$> pure (a, b) <*> gatherPairs ss
         gatherPairs []              = pure []
-        gatherPairs _               = Left "..."
-asAssoc _ sx     = Left ("Expected assoc list; got " ++ show sx)
+        gatherPairs (A {} : _)      = Left ("asAssoc: expected pair; found atom")
+        gatherPairs (DL {} : _)     = Left ("asAssoc: expected pair; found dotted list")
+        gatherPairs (L ls : _)      = Left ("asAssoc: expected pair; found list of length " ++ show (length ls))
+asAssoc f DL {}     = Left "asAssoc: expected assoc list; found dotted list"
+asAssoc f A {}      = Left "asAssoc: expected assoc list; found atom"
 
 car :: (RichSExpr t -> Either String t') -> [RichSExpr t] -> Either String t'
 car f (x:_) = f x
