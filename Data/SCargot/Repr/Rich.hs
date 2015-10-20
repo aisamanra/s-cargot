@@ -11,6 +11,9 @@ module Data.SCargot.Repr.Rich
        , pattern L
        , pattern DL
        , pattern Nil
+         -- * Lenses
+       , _car
+       , _cdr
          -- * Useful processing functions
        , fromPair
        , fromList
@@ -24,6 +27,33 @@ module Data.SCargot.Repr.Rich
 
 import Control.Applicative ((<$>), (<*>), pure)
 import Data.SCargot.Repr as R
+
+-- | A traversal with access to the first element of a pair.
+_car :: Applicative f => (RichSExpr a -> f (RichSExpr a)) -> RichSExpr a -> f (RichSExpr a)
+_car f (L (x:xs))    = (\ x -> L (x:xs)) `fmap` f x
+_car f (DL (x:xs) a) = (\ x -> DL (x:xs) a) `fmap` f x
+_car _ (A a)         = pure (A a)
+_car _ Nil           = pure Nil
+
+-- | A traversal with access to the second element of a pair.
+_cdr :: Applicative f => (RichSExpr a -> f (RichSExpr a)) -> RichSExpr a -> f (RichSExpr a)
+_cdr f (L (x:xs)) =
+  let go Nil     = L [x]
+      go (A a)   = DL [x] a
+      go (L xs') = L (x:xs')
+  in go `fmap` f (L xs)
+_cdr f (DL [x] a) =
+  let go Nil    = L [x]
+      go (A a') = DL [x] a'
+      go (L xs) = L (x:xs)
+  in go `fmap` f (A a)
+_cdr f (DL (x:xs) a) =
+  let go Nil    = L [x]
+      go (A a') = DL [x] a'
+      go (L xs) = L (x:xs)
+  in go `fmap` f (DL xs a)
+_cdr _ (A a)      = pure (A a)
+_cdr _ Nil        = pure Nil
 
 -- | A shorter infix alias to grab the head
 --   and tail of an `RSList`.
