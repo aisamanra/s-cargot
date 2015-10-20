@@ -7,6 +7,9 @@ module Data.SCargot.Repr.Basic
        , pattern (:::)
        , pattern A
        , pattern Nil
+         -- * Lenses
+       , _car
+       , _cdr
          -- * Useful processing functions
        , fromPair
        , fromList
@@ -20,6 +23,18 @@ module Data.SCargot.Repr.Basic
 
 import Control.Applicative ((<$>), (<*>), pure)
 import Data.SCargot.Repr as R
+
+-- | A traversal with access to the first element of a pair.
+_car :: Applicative f => (SExpr a -> f (SExpr a)) -> SExpr a -> f (SExpr a)
+_car f (x ::: xs) = (:::) <$> f x <*> pure xs
+_car _ (A a)      = pure (A a)
+_car _ Nil        = pure Nil
+
+-- | A traversal with access to the second element of a pair.
+_cdr :: Applicative f => (SExpr a -> f (SExpr a)) -> SExpr a -> f (SExpr a)
+_cdr f (x ::: xs) = (:::) <$> pure x <*> f xs
+_cdr _ (A a)      = pure (A a)
+_cdr _ Nil        = pure Nil
 
 infixr 5 :::
 
