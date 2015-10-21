@@ -135,8 +135,8 @@ sign =  (pure id     <* char '+')
     <|> pure id
 
 -- | Given a parser for some kind of numeric literal, this will attempt to
---   parse a leading @+@ or a leading @-@ and, in the latter case, negate
---   the parsed number.
+--   parse a leading @+@ or a leading @-@ followed by the numeric literal,
+--   and if a @-@ is found, negate that literal.
 signed :: Num a => Parser a -> Parser a
 signed p = ($) <$> sign <*> p
 
@@ -168,12 +168,12 @@ dozDigit = digit <|> oneOf "AaBb\x218a\x218b"
 
 -- | A parser for non-signed duodecimal (dozenal) numbers. This understands both
 --   the ASCII characters @'a'@ and @'b'@ and the Unicode characters @'\x218a'@ (↊)
---   and @'\x218b'@ (↋) as digits with the decimal values @11@ and @12@
+--   and @'\x218b'@ (↋) as digits with the decimal values @10@ and @11@
 --   respectively.
 dozNumber :: Parser Integer
 dozNumber = number 16 dozDigit
 
--- | A parser for signed hexadecimal numbers, with an optional leading @+@ or @-@.
+-- | A parser for signed duodecimal (dozenal) numbers, with an optional leading @+@ or @-@.
 signedDozNumber :: Parser Integer
 signedDozNumber = ($) <$> sign <*> dozNumber
 
