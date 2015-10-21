@@ -1,5 +1,10 @@
-module Data.SCargot.Common ( -- * Numeric Literal Parsers
-                             binNumber
+module Data.SCargot.Common ( -- $intro
+                           -- * Lisp Identifier Syntaxes
+                             parseR5RSIdent
+                           , parseR6RSIdent
+                           , parseR7RSIdent
+                             -- * Numeric Literal Parsers
+                           , binNumber
                            , signedBinNumber
                            , octNumber
                            , signedOctNumber
@@ -10,10 +15,6 @@ module Data.SCargot.Common ( -- * Numeric Literal Parsers
                            , hexNumber
                            , signedHexNumber
                            , signed
-                           -- * Lisp Identifier Syntaxes
-                           , parseR5RSIdent
-                           , parseR6RSIdent
-                           , parseR7RSIdent
                            ) where
 
 import           Data.Char
@@ -184,3 +185,12 @@ hexNumber = number 16 hexDigit
 -- | A parser for signed hexadecimal numbers, with an optional leading @+@ or @-@.
 signedHexNumber :: Parser Integer
 signedHexNumber = ($) <$> sign <*> hexNumber
+
+{- $intro
+
+This module contains a selection of parsers for different kinds of
+identifiers and literals, from which more elaborate parsers can be
+assembled. These can afford the user a quick way of building parsers
+for different atom types.
+
+-}
