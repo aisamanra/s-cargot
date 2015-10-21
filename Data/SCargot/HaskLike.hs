@@ -22,10 +22,10 @@ import Data.SCargot.General (SExprSpec, mkSpec)
 
 This module is intended for simple, ad-hoc configuration or data formats
 that might not need their on rich structure but might benefit from a few
-various literal formats. the 'haskLikeSpec' understands identifiers as
-defined by R5RS as well as string, integer, and floating-point literals
-as defined by the Haskell spec, but won't get any Lisp-specific vector
-literals or other structure.
+various kinds of literals. The 'haskLikeSpec' understands identifiers as
+defined by R5RS, as well as string, integer, and floating-point literals
+as defined by the Haskell spec. It does _not_ natively understand other
+data types, such as booleans, vectors, bitstrings, or the like.
 
 -}
 
@@ -130,10 +130,11 @@ sHaskLikeAtom (HSFloat f)  = pack (show f)
 
 -- | This `SExprSpec` understands s-expressions that contain
 --   Scheme-like tokens, as well as string literals, integer
---   literals, and floating-point literals. These are read
---   and shown with Haskell lexical syntax, so the same set
---   of values understood by GHC should be understood by this
---   spec as well. This includes string escapes, different
---   number bases, and so forth.
+--   literals, and floating-point literals. Each of these values
+--   is parsed according to the lexical rules in the Haskell
+--   report, so the same set of string escapes, numeric bases,
+--   and floating-point options are available. This spec does
+--   not parse comments and does not understand any reader
+--   macros.
 haskLikeSpec :: SExprSpec HaskLikeAtom (SExpr HaskLikeAtom)
 haskLikeSpec = mkSpec pHaskLikeAtom sHaskLikeAtom
