@@ -30,10 +30,21 @@ module Data.SCargot.Repr.WellFormed
 import Control.Applicative ((<$>), (<*>), pure)
 import Data.SCargot.Repr as R
 
+-- | Produce the head and tail of the s-expression (if possible).
+--
+-- >>> uncons (L [A "el", A "eph", A "ant"])
+-- Just (WFSAtom "el",WFSList [WFSAtom "eph",WFSAtom "ant"])
 uncons :: WellFormedSExpr a -> Maybe (WellFormedSExpr a, WellFormedSExpr a)
 uncons R.WFSAtom {}       = Nothing
 uncons (R.WFSList (x:xs)) = Just (x, R.WFSList xs)
 
+-- | Combine the two-expressions into a new one. This will return
+--   @Nothing@ if the resulting s-expression is not well-formed.
+--
+-- >>> cons (A "el") (L [A "eph", A "ant"])
+-- Just (WFSList [WFSAtom "el",WFSAtom "eph",WFSAtom "ant"])
+-- >>> cons (A "pachy") (A "derm"))
+-- Nothing
 cons :: WellFormedSExpr a -> WellFormedSExpr a -> Maybe (WellFormedSExpr a)
 cons _ (R.WFSAtom {}) = Nothing
 cons x (R.WFSList xs) = Just (R.WFSList (x:xs))
