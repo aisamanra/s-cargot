@@ -119,7 +119,7 @@ fromAtom (L _)    = Left "fromAtom: expected atom; found list"
 fromAtom (DL _ _) = Left "fromAtom: expected atom; found dotted list"
 fromAtom (A a)    = return a
 
--- | Parses a two -element list using the provided function.
+-- | Parses a two-element list using the provided function.
 --
 -- >>> let go (A l) (A r) = return (l ++ r); go _ _ = Left "expected atoms"
 -- >>> asPair go (L [A "pachy", A "derm"])
