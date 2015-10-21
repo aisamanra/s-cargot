@@ -1,10 +1,14 @@
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Data.SCargot.Repr.Rich
        ( -- * 'RichSExpr' representation
          R.RichSExpr(..)
        , R.toRich
        , R.fromRich
+         -- * Constructing and Deconstructing
+       , cons
+       , uncons
          -- * Useful pattern synonyms
        , pattern (:::)
        , pattern A
@@ -71,20 +75,54 @@ _cdr f (DL (x:xs) a) =
 _cdr _ (A a)      = pure (A a)
 _cdr _ Nil        = pure Nil
 
+-- | Produce the head and tail of the s-expression (if possible).
+--
+-- >>> uncons (L [A "el", A "eph", A "ant"])
+-- Just (A "el",L [A "eph",A "ant"])
+uncons :: RichSExpr a -> Maybe (RichSExpr a, RichSExpr a)
+uncons R.RSAtom {}           = Nothing
+uncons (R.RSList (x:xs))     = Just (x, R.RSList xs)
+uncons (R.RSDotted (x:xs) a) = Just (x, R.RSDotted xs a)
+
+-- | Combine the two s-expressions into a new one.
+--
+-- >>> cons (A "el") (L [A "eph", A "ant"])
+-- L [A "el",A "eph",A "ant"]
+cons :: RichSExpr a -> RichSExpr a -> RichSExpr a
+cons x (R.RSList xs)     = R.RSList (x:xs)
+cons x (R.RSDotted xs a) = R.RSDotted (x:xs) a
+cons x (R.RSAtom a)      = R.RSDotted [x] a
+
 -- | A shorter infix alias to grab the head
 --   and tail of an `RSList`.
-pattern x ::: xs = R.RSList (x : xs)
+--
+-- >>> A "one" ::: L [A "two", A "three"]
+-- RSList [RSAtom "one",RSAtom "two",RSAtom "three"]
+pattern x ::: xs <- (uncons -> Just (x, xs))
+  where x ::: xs = cons x xs
 
 -- | A shorter alias for `RSAtom`
+--
+-- >>> A "elephant"
+-- RSAtom "elephant"
 pattern A a       = R.RSAtom a
 
 -- | A shorter alias for `RSList`
+--
+-- >>> L [A "pachy", A "derm"]
+-- RSList [RSAtom "pachy",RSAtom "derm"]
 pattern L xs      = R.RSList xs
 
 -- | A shorter alias for `RSDotted`
+--
+-- >>> DL [A "pachy"] "derm"
+-- RSDotted [RSAtom "pachy"] "derm"
 pattern DL xs x = R.RSDotted xs x
 
 -- | A shorter alias for `RSList` @[]@
+--
+-- >>> Nil
+-- RSList []
 pattern Nil = R.RSList []
 
 -- | Utility function for parsing a pair of things: this parses a two-element list,

@@ -1,10 +1,14 @@
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Data.SCargot.Repr.WellFormed
        ( -- * 'WellFormedSExpr' representation
          R.WellFormedSExpr(..)
        , R.toWellFormed
        , R.fromWellFormed
+         -- * Constructing and Deconstructing
+       , cons
+       , uncons
          -- * Useful pattern synonyms
        , pattern (:::)
        , pattern L
@@ -26,17 +30,38 @@ module Data.SCargot.Repr.WellFormed
 import Control.Applicative ((<$>), (<*>), pure)
 import Data.SCargot.Repr as R
 
--- | A shorter infix alias to grab the head
---   and tail of a `WFSList`
-pattern x ::: xs = R.WFSList (x : xs)
+uncons :: WellFormedSExpr a -> Maybe (WellFormedSExpr a, WellFormedSExpr a)
+uncons R.WFSAtom {}       = Nothing
+uncons (R.WFSList (x:xs)) = Just (x, R.WFSList xs)
+
+cons :: WellFormedSExpr a -> WellFormedSExpr a -> Maybe (WellFormedSExpr a)
+cons _ (R.WFSAtom {}) = Nothing
+cons x (R.WFSList xs) = Just (R.WFSList (x:xs))
+
+-- | A shorter infix alias to grab the head and tail of a `WFSList`. This
+--   pattern is unidirectional, because it cannot be guaranteed that it
+--   is used to construct well-formed s-expressions; use the function "cons"
+--   instead.
+--
+-- >>> let sum (x ::: xs) = x + sum xs; sum Nil = 0
+pattern x ::: xs <- (uncons -> Just (x, xs))
 
 -- | A shorter alias for `WFSList`
+--
+-- >>> L [A "pachy", A "derm"]
+-- WFSList [WFSAtom "pachy",WFSAtom "derm"]
 pattern L xs = R.WFSList xs
 
 -- | A shorter alias for `WFSAtom`
+--
+-- >>> A "elephant"
+-- WFSAtom "elephant"
 pattern A a  = R.WFSAtom a
 
 -- | A shorter alias for `WFSList` @[]@
+--
+-- >>> Nil
+-- WFSList []
 pattern Nil = R.WFSList []
 
 getShape :: WellFormedSExpr a -> String
