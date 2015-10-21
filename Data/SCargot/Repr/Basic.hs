@@ -1,11 +1,17 @@
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Data.SCargot.Repr.Basic
        ( -- * Basic 'SExpr' representation
          R.SExpr(..)
+         -- * Constructing and Deconstructing
+       , cons
+       , uncons
          -- * Shorthand Patterns
        , pattern (:::)
        , pattern A
+       , pattern L
+       , pattern DL
        , pattern Nil
          -- * Lenses
        , _car
@@ -48,16 +54,72 @@ _cdr f (x ::: xs) = (:::) <$> pure x <*> f xs
 _cdr _ (A a)      = pure (A a)
 _cdr _ Nil        = pure Nil
 
+-- | Produce the head and tail of the s-expression (if possible).
+--
+-- >>> uncons (A "el" ::: A "eph" ::: A "ant" ::: Nil)
+-- Just (A "el",SCons (SAtom "eph") (SCons (SAtom "ant") SNil))
+uncons :: SExpr a -> Maybe (SExpr a, SExpr a)
+uncons (SCons x xs) = Just (x, xs)
+uncons _            = Nothing
+
+-- | Combine the two s-expressions into a new one.
+--
+-- >>> cons (A "el") (L ["eph", A "ant"])
+-- SCons (SAtom "el) (SCons (SAtom "eph") (SCons (SAtom "ant") SNil))
+cons :: SExpr a -> SExpr a -> SExpr a
+cons = SCons
+
+mkList :: [SExpr a] -> SExpr a
+mkList []     = SNil
+mkList (x:xs) = SCons x (mkList xs)
+
+mkDList :: [SExpr a] -> a -> SExpr a
+mkDList []     a = SAtom a
+mkDList (x:xs) a = SCons x (mkDList xs a)
+
+gatherDList :: SExpr a -> Maybe ([SExpr a], a)
+gatherDList SNil     = Nothing
+gatherDList SAtom {} = Nothing
+gatherDList sx       = go sx
+  where go SNil = Nothing
+        go (SAtom a) = return ([], a)
+        go (SCons x xs) = do
+          (ys, a) <- go xs
+          return (x:ys, a)
+
 infixr 5 :::
 
 -- | A shorter infix alias for `SCons`
+--
+-- >>> A "pachy" ::: A "derm"
+-- SCons (SAtom "pachy") (SAtom "derm")
 pattern x ::: xs = SCons x xs
 
 -- | A shorter alias for `SAtom`
+--
+-- >>> A "elephant"
+-- SAtom "elephant"
 pattern A x = SAtom x
 
 -- | A (slightly) shorter alias for `SNil`
+--
+-- >>> Nil
+-- SNil
 pattern Nil = SNil
+
+-- | An alias for matching a proper list.
+--
+-- >>> L [A "pachy", A "derm"]
+-- SCons (SAtom "pachy") (SCons (SAtom "derm") SNil)
+pattern L xs <- (gatherList -> Right xs)
+  where L xs = mkList xs
+
+-- | An alias for matching a dotted list.
+--
+-- >>> DL [A "pachy"] A "derm"
+-- SCons (SAtom "pachy") (SAtom "derm")
+pattern DL xs x <- (gatherDList -> Just (xs, x))
+  where DL xs x = mkDList xs x
 
 getShape :: SExpr a -> String
 getShape Nil = "empty list"
