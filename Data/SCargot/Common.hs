@@ -171,7 +171,7 @@ dozDigit = digit <|> oneOf "AaBb\x218a\x218b"
 --   and @'\x218b'@ (↋) as digits with the decimal values @10@ and @11@
 --   respectively.
 dozNumber :: Parser Integer
-dozNumber = number 16 dozDigit
+dozNumber = number 12 dozDigit
 
 -- | A parser for signed duodecimal (dozenal) numbers, with an optional leading @+@ or @-@.
 signedDozNumber :: Parser Integer
