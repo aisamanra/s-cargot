@@ -1,9 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Data.SCargot.HaskLike ( -- $info
-                               haskLikeSpec
-                             , HaskLikeAtom(..)
-                             ) where
+module Data.SCargot.Language.HaskLike
+  ( -- $info
+    HaskLikeAtom(..)
+  , haskLikeParser
+  , haskLikePrinter
+  ) where
 
 import           Control.Applicative ((<$>), (<*>), (<$))
 import           Data.Maybe (catMaybes)
@@ -16,16 +18,16 @@ import           Prelude hiding (concatMap)
 
 import Data.SCargot.Common
 import Data.SCargot.Repr.Basic (SExpr)
-import Data.SCargot.General (SExprSpec, mkSpec)
+import Data.SCargot (SExprParser, SExprPrinter, mkParser, flatPrint)
 
 {- $info
 
 This module is intended for simple, ad-hoc configuration or data formats
 that might not need their on rich structure but might benefit from a few
-various kinds of literals. The 'haskLikeSpec' understands identifiers as
+various kinds of literals. The 'haskLikeParser' understands identifiers as
 defined by R5RS, as well as string, integer, and floating-point literals
-as defined by the Haskell spec. It does _not_ natively understand other
-data types, such as booleans, vectors, bitstrings, or the like.
+as defined by the Haskell spec. It does __not__ natively understand other
+data types, such as booleans, vectors, bitstrings.
 
 -}
 
@@ -128,7 +130,7 @@ sHaskLikeAtom (HSString s) = pack (show s)
 sHaskLikeAtom (HSInt i)    = pack (show i)
 sHaskLikeAtom (HSFloat f)  = pack (show f)
 
--- | This `SExprSpec` understands s-expressions that contain
+-- | This `SExprParser` understands s-expressions that contain
 --   Scheme-like tokens, as well as string literals, integer
 --   literals, and floating-point literals. Each of these values
 --   is parsed according to the lexical rules in the Haskell
@@ -136,5 +138,19 @@ sHaskLikeAtom (HSFloat f)  = pack (show f)
 --   and floating-point options are available. This spec does
 --   not parse comments and does not understand any reader
 --   macros.
-haskLikeSpec :: SExprSpec HaskLikeAtom (SExpr HaskLikeAtom)
-haskLikeSpec = mkSpec pHaskLikeAtom sHaskLikeAtom
+--
+-- >>> decode haskLikeParser "(0x01 \"\\x65lephant\")"
+-- Right [SCons (SAtom (HSInt 1)) (SCons (SAtom (HSString "elephant")) SNil)]
+haskLikeParser :: SExprParser HaskLikeAtom (SExpr HaskLikeAtom)
+haskLikeParser = mkParser pHaskLikeAtom
+
+-- | This 'SExprPrinter' emits s-expressions that contain Scheme-like
+--   tokens as well as string literals, integer literals, and floating-point
+--   literals, which will be emitted as the literals produced by Haskell's
+--   'show' function. This printer will produce a flat s-expression with
+--   no indentation of any kind.
+--
+-- >>> encode haskLikePrinter [L [A (HSInt 1), A (HSString "elephant")]]
+-- "(1 \"elephant\")"
+haskLikePrinter :: SExprPrinter HaskLikeAtom (SExpr HaskLikeAtom)
+haskLikePrinter = flatPrint sHaskLikeAtom

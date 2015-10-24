@@ -4,6 +4,9 @@ module Data.SCargot.Common ( -- $intro
                            , parseR6RSIdent
                            , parseR7RSIdent
                              -- * Numeric Literal Parsers
+                           , signed
+                           , prefixedNumber
+                           , signedPrefixedNumber
                            , binNumber
                            , signedBinNumber
                            , octNumber
@@ -14,7 +17,6 @@ module Data.SCargot.Common ( -- $intro
                            , signedDozNumber
                            , hexNumber
                            , signedHexNumber
-                           , signed
                            ) where
 
 import           Data.Char
@@ -42,7 +44,7 @@ hasCategory c cs = generalCategory c `elem` cs
 
 -- | Parse an identifier according to the R6RS Scheme standard. An
 --   R6RS identifier may include inline hexadecimal escape sequences
---   so that, for example, @foo@ is equivalent to @f\x6f;o@, and is
+--   so that, for example, @foo@ is equivalent to @f\\x6f;o@, and is
 --   more liberal than R5RS as to which Unicode characters it may
 --   accept.
 parseR6RSIdent :: Parser Text
@@ -141,13 +143,30 @@ sign =  (pure id     <* char '+')
 signed :: Num a => Parser a -> Parser a
 signed p = ($) <$> sign <*> p
 
+-- | Parses a number in the same way as 'prefixedNumber', with an optional
+--   leading @+@ or @-@.
+signedPrefixedNumber :: Parser Integer
+signedPrefixedNumber = signed prefixedNumber
+
+-- | Parses a number, determining which numeric base to use by examining
+--   the literal's prefix: @0x@ for a hexadecimal number, @0z@ for a
+--   dozenal number, @0o@ for an octal number, and @0b@ for a binary
+--   number (as well as the upper-case versions of the same.) If the
+--   base is omitted entirely, then it is treated as a decimal number.
+prefixedNumber :: Parser Integer
+prefixedNumber =  (string "0x" <|> string "0X") *> hexNumber
+              <|> (string "0o" <|> string "0O") *> octNumber
+              <|> (string "0z" <|> string "0Z") *> dozNumber
+              <|> (string "0b" <|> string "0B") *> binNumber
+              <|> decNumber
+
 -- | A parser for non-signed binary numbers
 binNumber :: Parser Integer
 binNumber = number 2 (char '0' <|> char '1')
 
 -- | A parser for signed binary numbers, with an optional leading @+@ or @-@.
 signedBinNumber :: Parser Integer
-signedBinNumber = ($) <$> sign <*> binNumber
+signedBinNumber = signed binNumber
 
 -- | A parser for non-signed octal numbers
 octNumber :: Parser Integer

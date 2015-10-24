@@ -1,6 +1,7 @@
 name:                s-cargot
 version:             0.1.0.0
 synopsis:            A flexible, extensible s-expression library.
+homepage:            https://github.com/aisamanra/s-cargot
 description:         S-Cargot is a library for working with s-expressions in
                      a modular and extensible way, opting for genericity and
                      flexibility instead of speed. Instead of understanding
@@ -18,18 +19,22 @@ category:            Data
 build-type:          Simple
 cabal-version:       >=1.10
 
+source-repository head
+   type: git
+   location: git://github.com/aisamanra/s-cargot.git
+
 library
   exposed-modules:     Data.SCargot,
                        Data.SCargot.Repr,
                        Data.SCargot.Repr.Basic,
                        Data.SCargot.Repr.Rich,
                        Data.SCargot.Repr.WellFormed,
-                       Data.SCargot.General,
-                       Data.SCargot.Pretty,
-                       Data.SCargot.Basic,
+                       Data.SCargot.Parse,
+                       Data.SCargot.Print,
                        Data.SCargot.Comments,
                        Data.SCargot.Common,
-                       Data.SCargot.HaskLike
+                       Data.SCargot.Language.Basic,
+                       Data.SCargot.Language.HaskLike
   build-depends:       base >=4.7 && <5,
                        parsec,
                        text,

@@ -1,26 +1,22 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Data.SCargot.General
-  ( -- * SExprSpec
-    SExprSpec
-  , mkSpec
-  , convertSpec
+module Data.SCargot.Parse
+  ( -- * Parsing
+    decode
+  , decodeOne
+    -- * Parsing Control
+  , SExprParser
+  , Reader
+  , Comment
+  , mkParser
+  , setCarrier
   , addReader
   , setComment
-    -- * Specific SExprSpec Conversions
+    -- * Specific SExprParser Conversions
   , asRich
   , asWellFormed
   , withQuote
-    -- * Using a SExprSpec
-  , decode
-  , decodeOne
-  , encode
-  , encodeOne
-    -- * Useful Type Aliases
-  , Reader
-  , Comment
-  , Serializer
   ) where
 
 import           Control.Applicative ((<*), (*>), (<*>), (<$>), pure)
@@ -63,87 +59,69 @@ type Reader atom = (Parser (SExpr atom) -> Parser (SExpr atom))
 
 -- | A 'Comment' represents any kind of skippable comment. This
 --   parser __must__ be able to fail if a comment is not being
---   recognized, and it __must__ not consume any input.
+--   recognized, and it __must__ not consume any input in case
+--   of failure.
 type Comment = Parser ()
 
--- | A 'Serializer' is any function which can serialize an Atom
---   to 'Text'.
-type Serializer atom = atom -> Text
-
--- | A 'SExprSpec' describes a parser and emitter for a particular
---   variant of S-Expressions. The @atom@ type corresponds to a
---   Haskell type used to represent the atoms, and the @carrier@
---   type corresponds to the parsed S-Expression structure. The
---   'SExprSpec' type is deliberately opaque so that it must be
---   constructed and modified with other helper functions.
-data SExprSpec atom carrier = SExprSpec
+-- | A 'SExprParser' describes a parser for a particular value
+--   that has been serialized as an s-expression. The @atom@ parameter
+--   corresponds to a Haskell type used to represent the atoms,
+--   and the @carrier@ parameter corresponds to the parsed S-Expression
+--   structure.
+data SExprParser atom carrier = SExprParser
   { sesPAtom   :: Parser atom
-  , sesSAtom   :: Serializer atom
   , readerMap  :: ReaderMacroMap atom
   , comment    :: Maybe Comment
   , postparse  :: SExpr atom -> Either String carrier
-  , preserial  :: carrier -> SExpr atom
   }
 
--- | Create a basic 'SExprSpec' when given a parser and serializer
---   for an atom type. A small minimal 'SExprSpec' that recognizes
---   any alphanumeric sequence as a valid atom looks like:
+-- | Create a basic 'SExprParser' when given a parser
+--   for an atom type.
 --
---   > simpleSpec :: SExprSpec Text (SExpr Text)
---   > simpleSpec = mkSpec (pack <$> many1 isAlphaNum) id
-mkSpec :: Parser atom -> Serializer atom -> SExprSpec atom (SExpr atom)
-mkSpec p s = SExprSpec
-  { sesPAtom   = p <?> "atom"
-  , sesSAtom   = s
+--   >>> import Text.Parsec (alphaNum, many1)
+--   >>> let parser = mkParser (many1 alphaNum)
+--   >>> decode parser "(ele phant)"
+--   Right [SCons (SAtom "ele") (SCons (SAtom "phant") SNil)]
+mkParser :: Parser atom -> SExprParser atom (SExpr atom)
+mkParser parser = SExprParser
+  { sesPAtom   = parser
   , readerMap  = M.empty
   , comment    = Nothing
   , postparse  = return
-  , preserial  = id
   }
 
--- | Modify the carrier type for a 'SExprSpec'. This is
+-- | Modify the carrier type for a 'SExprParser'. This is
 --   used internally to convert between various 'SExpr' representations,
 --   but could also be used externally to add an extra conversion layer
---   onto a 'SExprSpec'.
+--   onto a 'SExprParser'.
 --
---   The following defines an S-expression spec that recognizes the
---   language of binary addition trees. It does so by first transforming
---   the internal S-expression representation using 'asWellFormed', and
---   then providing a conversion between the 'WellFormedSExpr' type and
---   an @Expr@ AST. Notice that the below parser uses 'String' as its
---   underlying atom type, instead of some token type.
---
---   > data Expr = Add Expr Expr | Num Int deriving (Eq, Show)
---   >
---   > toExpr :: WellFormedSExpr String -> Either String Expr
---   > toExpr (L [A "+", l, r])     = Add <$> toExpr l <*> toExpr r
---   > toExpr (A c) | all isDigit c = pure (Num (read c))
---   > toExpr c                     = Left ("Invalid expr: " ++ show c)
---   >
---   > fromExpr :: Expr -> WellFormedSExpr String
---   > fromExpr (Add l r) = L [A "+", fromExpr l, fromExpr r]
---   > fromExpr (Num n)   = A (show n)
---   >
---   > mySpec :: SExprSpec String Expr
---   > mySpec = convertSpec toExpr fromExpr $ asWellFormed $ mkSpec parser pack
---   >   where parser = many1 (satisfy isValidChar)
---   >         isValidChar c = isDigit c || c == '+'
-convertSpec :: (b -> Either String c) -> (c -> b)
-               -> SExprSpec a b -> SExprSpec a c
-convertSpec f g spec = spec
-  { postparse = postparse spec >=> f
-  , preserial = preserial spec . g
-  }
+-- >>> import Text.Parsec (alphaNum, many1)
+-- >>> import Data.SCargot.Repr (toRich)
+-- >>> let parser = setCarrier (return . toRich) (mkParser (many1 alphaNum))
+-- >>> decode parser "(ele phant)"
+-- Right [RSlist [RSAtom "ele",RSAtom "phant"]]
+setCarrier :: (b -> Either String c) -> SExprParser a b -> SExprParser a c
+setCarrier f spec = spec { postparse = postparse spec >=> f }
 
 -- | Convert the final output representation from the 'SExpr' type
 --   to the 'RichSExpr' type.
-asRich :: SExprSpec a (SExpr b) -> SExprSpec a (RichSExpr b)
-asRich = convertSpec (return . toRich) fromRich
+--
+-- >>> import Text.Parsec (alphaNum, many1)
+-- >>> let parser = asRich (mkParser (many1 alphaNum))
+-- >>> decode parser "(ele phant)"
+-- Right [RSlist [RSAtom "ele",RSAtom "phant"]]
+asRich :: SExprParser a (SExpr b) -> SExprParser a (RichSExpr b)
+asRich = setCarrier (return . toRich)
 
 -- | Convert the final output representation from the 'SExpr' type
 --   to the 'WellFormedSExpr' type.
-asWellFormed :: SExprSpec a (SExpr b) -> SExprSpec a (WellFormedSExpr b)
-asWellFormed = convertSpec toWellFormed fromWellFormed
+--
+-- >>> import Text.Parsec (alphaNum, many1)
+-- >>> let parser = asWellFormed (mkParser (many1 alphaNum))
+-- >>> decode parser "(ele phant)"
+-- Right [WFSList [WFSAtom "ele",WFSAtom "phant"]]
+asWellFormed :: SExprParser a (SExpr b) -> SExprParser a (WellFormedSExpr b)
+asWellFormed = setCarrier toWellFormed
 
 -- | Add the ability to execute some particular reader macro, as
 --   defined by its initial character and the 'Parser' which returns
@@ -152,16 +130,13 @@ asWellFormed = convertSpec toWellFormed fromWellFormed
 --   parsing after the reader character has been removed from the
 --   stream.
 --
---   The following defines an S-expression variant that treats
---   @'expr@ as being sugar for @(quote expr)@. Note that this is done
---   already in a more general way by the 'withQuote' function, but
---   it is a good illustration of using reader macros in practice:
---
---   > mySpec :: SExprSpec String (SExpr Text)
---   > mySpec = addReader '\'' reader $ mkSpec (many1 alphaNum) pack
---   >   where reader p = quote <$> p
---   >         quote e  = SCons (SAtom "quote") (SCons e SNil)
-addReader :: Char -> Reader a -> SExprSpec a c -> SExprSpec a c
+-- >>> import Text.Parsec (alphaNum, char, many1)
+-- >>> let vecReader p = (char ']' *> pure SNil) <|> (SCons <$> p <*> vecReader p)
+-- >>> let parser = addReader '[' vecReader (mkParser (many1 alphaNum))
+-- >>> decode parser "(an [ele phant])"
+-- Right [SCons (SAtom "an") (SCons (SCons (SAtom "ele") (SCons (SAtom "phant") SNil)) SNil)]
+
+addReader :: Char -> Reader a -> SExprParser a c -> SExprParser a c
 addReader c reader spec = spec
   { readerMap = M.insert c reader (readerMap spec) }
 
@@ -171,23 +146,25 @@ addReader c reader spec = spec
 --   cause an infinite loop), and also that it __not consume any input__
 --   (which may require it to be wrapped in 'try'.)
 --
---   The following code defines an S-expression variant that skips
---   C++-style comments, i.e. those which begin with @//@ and last
---   until the end of a line:
---
---   > t :: SExprSpec String (SExpr Text)
---   > t = setComment comm $ mkSpec (many1 alphaNum) pack
---   >   where comm = try (string "//" *> manyTill newline *> pure ())
+-- >>> import Text.Parsec (alphaNum, anyChar, manyTill, many1, string)
+-- >>> let comment = string "//" *> manyTill anyChar newline *> pure ()
+-- >>> let parser = setComment comment (mkParser (many1 alphaNum))
+-- >>> decode parser "(ele //a comment\n  phant)"
+-- Right [SCons (SAtom "ele") (SCons (SAtom "phant") SNil)]
 
-setComment :: Comment -> SExprSpec a c -> SExprSpec a c
+setComment :: Comment -> SExprParser a c -> SExprParser a c
 setComment c spec = spec { comment = Just (c <?> "comment") }
 
--- | Add the ability to understand a quoted S-Expression. In general,
---   many Lisps use @'sexpr@ as sugar for @(quote sexpr)@. This is
---   a convenience function which allows you to easily add quoted
---   expressions to a 'SExprSpec', provided that you supply which
---   atom you want substituted in for the symbol @quote@.
-withQuote :: IsString t => SExprSpec t (SExpr t) -> SExprSpec t (SExpr t)
+-- | Add the ability to understand a quoted S-Expression.
+--   Many Lisps use @'sexpr@ as sugar for @(quote sexpr)@. This
+--   assumes that the underlying atom type implements the "IsString"
+--   class, and will create the @quote@ atom using @fromString "quote"@.
+--
+-- >>> import Text.Parsec (alphaNum, many1)
+-- >>> let parser = withQuote (mkParser (many1 alphaNum))
+-- >>> decode parser "'elephant"
+-- Right [SCons (SAtom "quote") (SCons (SAtom "foo") SNil)]
+withQuote :: IsString t => SExprParser t (SExpr t) -> SExprParser t (SExpr t)
 withQuote = addReader '\'' (fmap go)
   where go s  = SCons "quote" (SCons s SNil)
 
@@ -250,17 +227,17 @@ doParse p t = case runParser p () "" t of
 --   the S-expression (ignoring comments or whitespace) then this
 --   will fail: for those cases, use 'decode', which returns a list of
 --   all the S-expressions found at the top level.
-decodeOne :: SExprSpec atom carrier -> Text -> Either String carrier
+decodeOne :: SExprParser atom carrier -> Text -> Either String carrier
 decodeOne spec = doParse (parser <* eof) >=> (postparse spec)
   where parser = parseGenericSExpr
                    (sesPAtom spec)
                    (readerMap spec)
                    (buildSkip (comment spec))
 
--- | Decode several S-expressions according to a given 'SExprSpec'. This
+-- | Decode several S-expressions according to a given 'SExprParser'. This
 --   will return a list of every S-expression that appears at the top-level
 --   of the document.
-decode :: SExprSpec atom carrier -> Text -> Either String [carrier]
+decode :: SExprParser atom carrier -> Text -> Either String [carrier]
 decode spec =
   doParse (many1 parser <* eof) >=> mapM (postparse spec)
     where parser = parseGenericSExpr
@@ -268,6 +245,7 @@ decode spec =
                      (readerMap spec)
                      (buildSkip (comment spec))
 
+{-
 -- | Encode (without newlines) a single S-expression.
 encodeSExpr :: SExpr atom -> (atom -> Text) -> Text
 encodeSExpr SNil _         = "()"
@@ -279,8 +257,9 @@ encodeSExpr (SCons x xs) t = go xs (encodeSExpr x t)
 
 -- | Emit an S-Expression in a machine-readable way. This does no
 --   pretty-printing or indentation, and produces no comments.
-encodeOne :: SExprSpec atom carrier -> carrier -> Text
+encodeOne :: SExprParser atom carrier -> carrier -> Text
 encodeOne spec c = encodeSExpr (preserial spec c) (sesSAtom spec)
 
-encode :: SExprSpec atom carrier -> [carrier] -> Text
+encode :: SExprParser atom carrier -> [carrier] -> Text
 encode spec cs = T.concat (map (encodeOne spec) cs)
+-}
