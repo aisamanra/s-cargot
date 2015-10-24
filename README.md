@@ -66,7 +66,7 @@ reimplement the basic plumbing yourself.
 The central way of interacting with the S-Cargot library is by creating
 and modifying datatypes which represent specifications for parsing and
 printing s-expressions. Each of those types has two type parameters, which
-are often called @atom@ and @carrier@:
+are often called `atom` and `carrier`:
 
 ~~~~
                          +------ the type that represents an atom or value
