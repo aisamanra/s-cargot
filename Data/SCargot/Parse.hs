@@ -19,16 +19,14 @@ module Data.SCargot.Parse
   , withQuote
   ) where
 
-import           Control.Applicative ((<*), (*>), (<*>), (<$>), pure)
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative ((<$>), (<*), pure)
+#endif
 import           Control.Monad ((>=>))
-import           Data.Char (isAlpha, isDigit, isAlphaNum)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import           Data.Maybe (fromJust)
-import           Data.Monoid ((<>))
+import           Data.Text (Text)
 import           Data.String (IsString)
-import           Data.Text (Text, pack, unpack)
-import qualified Data.Text as T
 import           Text.Parsec ( (<|>)
                              , (<?>)
                              , char
@@ -44,9 +42,7 @@ import           Text.Parsec.Text (Parser)
 import           Data.SCargot.Repr ( SExpr(..)
                                    , RichSExpr
                                    , WellFormedSExpr
-                                   , fromRich
                                    , toRich
-                                   , fromWellFormed
                                    , toWellFormed
                                    )
 
@@ -197,14 +193,14 @@ parseList sExpr skip = do
       c <- peekChar
       case c of
         Just '.' -> do
-          char '.'
+          _ <- char '.'
           cdr <- sExpr
           skip
-          char ')'
+          _ <- char ')'
           skip
           return (SCons car cdr)
         Just ')' -> do
-          char ')'
+          _ <- char ')'
           skip
           return (SCons car SNil)
         _ -> do

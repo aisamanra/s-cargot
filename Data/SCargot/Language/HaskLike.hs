@@ -7,7 +7,9 @@ module Data.SCargot.Language.HaskLike
   , haskLikePrinter
   ) where
 
-import           Control.Applicative ((<$>), (<*>), (<$))
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative ((<$>), (<$))
+#endif
 import           Data.Maybe (catMaybes)
 import           Data.String (IsString(..))
 import           Data.Text (Text, pack)
@@ -52,7 +54,7 @@ instance IsString HaskLikeAtom where
 pString :: Parser Text
 pString = pack . catMaybes <$> between (char '"') (char '"') (many (val <|> esc))
   where val = Just <$> satisfy (\ c -> c /= '"' && c /= '\\' && c > '\026')
-        esc = do char '\\'
+        esc = do _ <- char '\\'
                  Nothing <$ (gap <|> char '&') <|>
                    Just <$> code
         gap  = many1 space >> char '\\'
@@ -84,15 +86,15 @@ pFloat = do
   n <- decNumber
   withDot n <|> noDot n
   where withDot n = do
-          char '.'
+          _ <- char '.'
           m <- decNumber
-          e <- option 1.0 exponent
+          e <- option 1.0 expn
           return ((fromIntegral n + asDec m 0) * e)
         noDot n = do
-          e <- exponent
+          e <- expn
           return (fromIntegral n * e)
-        exponent = do
-          oneOf "eE"
+        expn = do
+          _ <- oneOf "eE"
           s <- power
           x <- decNumber
           return (10 ** s (fromIntegral x))

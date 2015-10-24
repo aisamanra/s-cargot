@@ -26,8 +26,6 @@ module Data.SCargot.Comments
   , simpleBlockComment
   ) where
 
-import           Control.Monad (void)
-import           Data.Text (Text)
 import           Text.Parsec ( (<|>)
                              , anyChar
                              , manyTill

@@ -19,11 +19,13 @@ module Data.SCargot.Common ( -- $intro
                            , signedHexNumber
                            ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative hiding ((<|>), many)
+#endif
 import           Data.Char
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Text.Parsec
-import           Text.Parsec.Char (satisfy)
 import           Text.Parsec.Text (Parser)
 
 -- | Parse an identifier according to the R5RS Scheme standard. This
@@ -184,6 +186,7 @@ decNumber = number 10 digit
 signedDecNumber :: Parser Integer
 signedDecNumber = ($) <$> sign <*> decNumber
 
+dozDigit :: Parser Char
 dozDigit = digit <|> oneOf "AaBb\x218a\x218b"
 
 -- | A parser for non-signed duodecimal (dozenal) numbers. This understands both

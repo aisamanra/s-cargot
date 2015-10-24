@@ -20,10 +20,13 @@ module Data.SCargot.Repr
 
 import Data.Data (Data)
 import Data.Foldable (Foldable(..))
-import Data.Monoid (Monoid(..), (<>))
 import Data.Traversable (Traversable(..))
 import Data.Typeable (Typeable)
 import GHC.Exts (IsList(..), IsString(..))
+
+#if !MIN_VERSION_base(4,8,0)
+import Prelude hiding (foldr)
+#endif
 
 -- | All S-Expressions can be understood as a sequence
 --   of @cons@ cells (represented here by 'SCons'), the
@@ -85,7 +88,8 @@ toRich (SAtom a) = RSAtom a
 toRich (SCons x xs) = go xs (toRich x:)
   where go (SAtom a) rs    = RSDotted (rs []) a
         go SNil rs         = RSList (rs [])
-        go (SCons x xs) rs = go xs (rs . (toRich x:))
+        go (SCons y ys) rs = go ys (rs . (toRich y:))
+toRich SNil = RSList []
 
 -- | This follows the same laws as 'toRich'.
 fromRich :: RichSExpr atom -> SExpr atom
@@ -128,11 +132,11 @@ toWellFormed (SAtom a) = return (WFSAtom a)
 toWellFormed (SCons x xs) = do
   x' <- toWellFormed x
   go xs (x':)
-  where go (SAtom a) rs = Left "Found atom in cdr position"
+  where go (SAtom _) _  = Left "Found atom in cdr position"
         go SNil rs      = return (WFSList (rs []))
-        go (SCons x xs) rs = do
-          x' <- toWellFormed x
-          go xs (rs . (x':))
+        go (SCons y ys) rs = do
+          y' <- toWellFormed y
+          go ys (rs . (y':))
 
 -- | Convert a WellFormedSExpr back into a SExpr.
 fromWellFormed :: WellFormedSExpr atom -> SExpr atom

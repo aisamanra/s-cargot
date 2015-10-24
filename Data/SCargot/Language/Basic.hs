@@ -18,7 +18,6 @@ import           Data.SCargot ( SExprParser
                               , mkParser
                               , flatPrint
                               )
-import           Data.SCargot.Comments (withLispComments)
 
 isAtomChar :: Char -> Bool
 isAtomChar c = isAlphaNum c
