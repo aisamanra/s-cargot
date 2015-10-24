@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Data.SCargot.Repr.Basic
@@ -27,7 +28,9 @@ module Data.SCargot.Repr.Basic
        , asAssoc
        ) where
 
-import Control.Applicative ((<$>), (<*>), pure)
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative (Applicative, (<$>), (<*>), pure)
+#endif
 import Data.SCargot.Repr as R
 
 -- | A traversal with access to the first element of a pair.
@@ -38,9 +41,9 @@ import Data.SCargot.Repr as R
 -- >>> set _car (A "two" ::: A "three" ::: Nil) (A "one" ::: A "elephant")
 -- (A "two" ::: A "three" ::: Nil) ::: A "elephant"
 _car :: Applicative f => (SExpr a -> f (SExpr a)) -> SExpr a -> f (SExpr a)
-_car f (x ::: xs) = (:::) <$> f x <*> pure xs
-_car _ (A a)      = pure (A a)
-_car _ Nil        = pure Nil
+_car f (SCons x xs) = (:::) <$> f x <*> pure xs
+_car _ (SAtom a)    = pure (A a)
+_car _ SNil         = pure SNil
 
 -- | A traversal with access to the second element of a pair.
 --
@@ -50,9 +53,9 @@ _car _ Nil        = pure Nil
 -- >>> set _cdr (A "two" ::: A "three" ::: Nil) (A "one" ::: A "elephant")
 -- A "one" ::: A "two" ::: A "three" ::: Nil
 _cdr :: Applicative f => (SExpr a -> f (SExpr a)) -> SExpr a -> f (SExpr a)
-_cdr f (x ::: xs) = (:::) <$> pure x <*> f xs
-_cdr _ (A a)      = pure (A a)
-_cdr _ Nil        = pure Nil
+_cdr f (SCons x xs) = (:::) <$> pure x <*> f xs
+_cdr _ (SAtom a)    = pure (A a)
+_cdr _ SNil         = pure Nil
 
 -- | Produce the head and tail of the s-expression (if possible).
 --
@@ -112,21 +115,26 @@ pattern Nil = SNil
 -- >>> L [A "pachy", A "derm"]
 -- SCons (SAtom "pachy") (SCons (SAtom "derm") SNil)
 pattern L xs <- (gatherList -> Right xs)
+#if MIN_VERSION_base(4,8,0)
   where L xs = mkList xs
+#endif
+
 
 -- | An alias for matching a dotted list.
 --
 -- >>> DL [A "pachy"] A "derm"
 -- SCons (SAtom "pachy") (SAtom "derm")
 pattern DL xs x <- (gatherDList -> Just (xs, x))
+#if MIN_VERSION_base(4,8,0)
   where DL xs x = mkDList xs x
+#endif
 
 getShape :: SExpr a -> String
 getShape Nil = "empty list"
-getShape sx = go 0 sx
-  where go n Nil      = "list of length " ++ show n
-        go n A {}     = "dotted list of length " ++ show n
-        go n (_:::xs) = go (n+1) xs
+getShape sx = go (0 :: Int) sx
+  where go n SNil         = "list of length " ++ show n
+        go n SAtom {}     = "dotted list of length " ++ show n
+        go n (SCons _ xs) = go (n+1) xs
 
 -- | Utility function for parsing a pair of things.
 --
@@ -143,7 +151,7 @@ fromPair _  _  sx = Left ("fromPair: expected two-element list; found " ++ getSh
 -- | Utility function for parsing a list of things.
 fromList :: (SExpr t -> Either String a) -> SExpr t -> Either String [a]
 fromList p (s ::: ss) = (:) <$> p s <*> fromList p ss
-fromList p Nil        = pure []
+fromList _ Nil        = pure []
 fromList _ sx         = Left ("fromList: expected list; found " ++ getShape sx)
 
 -- | Utility function for parsing a single atom

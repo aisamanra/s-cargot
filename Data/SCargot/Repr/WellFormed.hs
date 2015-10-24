@@ -21,13 +21,16 @@ module Data.SCargot.Repr.WellFormed
        , asPair
        , asList
        , isAtom
+       , isNil
        , asAtom
        , asAssoc
        , car
        , cdr
        ) where
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>), (<*>), pure)
+#endif
 import Data.SCargot.Repr as R
 
 -- | Produce the head and tail of the s-expression (if possible).
@@ -36,6 +39,7 @@ import Data.SCargot.Repr as R
 -- Just (WFSAtom "el",WFSList [WFSAtom "eph",WFSAtom "ant"])
 uncons :: WellFormedSExpr a -> Maybe (WellFormedSExpr a, WellFormedSExpr a)
 uncons R.WFSAtom {}       = Nothing
+uncons (R.WFSList [])     = Nothing
 uncons (R.WFSList (x:xs)) = Just (x, R.WFSList xs)
 
 -- | Combine the two-expressions into a new one. This will return
@@ -76,9 +80,9 @@ pattern A a  = R.WFSAtom a
 pattern Nil = R.WFSList []
 
 getShape :: WellFormedSExpr a -> String
-getShape A {}   = "atom"
-getShape Nil    = "empty list"
-getShape (L sx) = "list of length " ++ show (length sx)
+getShape WFSAtom {}   = "atom"
+getShape (WFSList []) = "empty list"
+getShape (WFSList sx) = "list of length " ++ show (length sx)
 
 -- | Utility function for parsing a pair of things.
 --
@@ -181,7 +185,7 @@ asAtom _ sx    = Left ("asAtom: expected atom; found " ++ getShape sx)
 asAssoc :: ([(WellFormedSExpr t, WellFormedSExpr t)] -> Either String a)
         -> WellFormedSExpr t -> Either String a
 asAssoc f (L ss) = gatherPairs ss >>= f
-  where gatherPairs (L [a, b] : ss) = (:) <$> pure (a, b) <*> gatherPairs ss
+  where gatherPairs (L [a, b] : ts) = (:) <$> pure (a, b) <*> gatherPairs ts
         gatherPairs []              = pure []
         gatherPairs (sx:_)          = Left ("asAssoc: expected pair; found " ++ getShape sx)
 asAssoc _ sx     = Left ("asAssoc: expected list; found " ++ getShape sx)
