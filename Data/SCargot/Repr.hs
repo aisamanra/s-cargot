@@ -5,7 +5,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Data.SCargot.Repr
-       ( -- * Elementary SExpr representation
+       ( -- $reprs
+         -- * Elementary SExpr representation
          SExpr(..)
          -- * Rich SExpr representation
        , RichSExpr(..)
@@ -51,8 +52,8 @@ instance IsList (SExpr atom) where
 --   represent a well-formed cons list, and 'RSDotted'
 --   to represent an improper list of the form
 --   @(a b c . d)@. This representation is based on
---   the shape of the parsed S-Expression, and not on
---   how it was represented, so @(a . (b))@ is going to
+--   the structure of the parsed S-Expression, and not on
+--   how it was originally represented: thus, @(a . (b))@ is going to
 --   be represented as @RSList[RSAtom a, RSAtom b]@
 --   despite having been originally represented as a
 --   dotted list.
@@ -138,3 +139,41 @@ fromWellFormed :: WellFormedSExpr atom -> SExpr atom
 fromWellFormed (WFSAtom a)  = SAtom a
 fromWellFormed (WFSList xs) =
   foldr SCons SNil (map fromWellFormed xs)
+
+{- $reprs
+
+This module contains several different representations for
+s-expressions. The s-cargot library underlying uses the
+'SExpr' type as its representation type, which is a binary
+tree representation with an arbitrary type for its leaves.
+
+This type is not always convenient to manipulate in Haskell
+code, this module defines two alternate representations
+which turn a sequence of nested right-branching cons pairs
+into Haskell lists: that is to say, they transform between
+
+@
+SCons a (SCons b (SCons c SNil))  \<=\>  RSList [a, b, c]
+@
+
+These two types differ in how they handle non-well-formed
+lists, i.e. lists that end with an atom. The 'RichSExpr'
+format handles this with a special constructor for lists
+that end in an atom:
+
+@
+SCons a (SCons b (SAtom c))  \<=\>  RSDotted [a, b] c
+@
+
+On the other hand, the 'WellFormedSExpr' type elects
+not to handle this case. This is unusual for Lisp source code,
+but is a reasonable choice for configuration or data
+storage formats that use s-expressions, where
+non-well-formed lists would be an unnecessary
+complication.
+
+To make working with these types less verbose, there are other
+modules that export pattern aliases and helper functions: these
+can be found at "Data.SCargot.Repr.Basic",
+"Data.SCargot.Repr.Rich", and "Data.SCargot.Repr.WellFormed".
+-}

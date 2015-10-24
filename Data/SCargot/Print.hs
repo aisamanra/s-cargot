@@ -2,12 +2,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Data.SCargot.Pretty
+module Data.SCargot.Print
          ( -- * Pretty-Printing
-           prettyPrintSExpr
+           encodeOne
+         , encode
            -- * Pretty-Printing Control
-         , LayoutOptions(..)
+         , SExprPrinter
          , Indent(..)
+         , setFromCarrier
+         , setMaxWidth
+         , removeMaxWidth
+         , setIndentAmount
+         , setIndentStrategy
            -- * Default Printing Strategies
          , basicPrint
          , flatPrint
@@ -46,12 +52,16 @@ data Indent
           --   >      quux)
     deriving (Eq, Show)
 
--- | A 'LayoutOptions' value describes the strategy taken in
---   pretty-printing a 'SExpr'.
-data LayoutOptions a = LayoutOptions
-  { atomPrinter  :: a -> Text
+-- | A 'SExprPrinter' value describes how to print a given value as an
+--   s-expression. The @carrier@ type parameter indicates the value
+--   that will be printed, and the @atom@ parameter indicates the type
+--   that will represent tokens in an s-expression structure.
+data SExprPrinter atom carrier = SExprPrinter
+  { atomPrinter  :: atom -> Text
       -- ^ How to serialize a given atom to 'Text'.
-  , swingIndent  :: SExpr a -> Indent
+  , fromCarrier  :: carrier -> SExpr atom
+      -- ^ How to turn a carrier type back into a 'Sexpr'.
+  , swingIndent  :: SExpr atom -> Indent
       -- ^ How to indent subsequent expressions, as determined by
       --   the head of the list.
   , indentAmount :: Int
@@ -64,9 +74,10 @@ data LayoutOptions a = LayoutOptions
 
 -- | A default 'LayoutOptions' struct that will always print a 'SExpr'
 --   as a single line.
-flatPrint :: (a -> Text) -> LayoutOptions a
-flatPrint printer = LayoutOptions
+flatPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
+flatPrint printer = SExprPrinter
   { atomPrinter  = printer
+  , fromCarrier  = id
   , swingIndent  = const Swing
   , indentAmount = 2
   , maxWidth     = Nothing
@@ -75,13 +86,66 @@ flatPrint printer = LayoutOptions
 -- | A default 'LayoutOptions' struct that will always swing subsequent
 --   expressions onto later lines if they're too long, indenting them
 --   by two spaces.
-basicPrint :: (a -> Text) -> LayoutOptions a
-basicPrint printer = LayoutOptions
+basicPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
+basicPrint printer = SExprPrinter
   { atomPrinter  = printer
+  , fromCarrier  = id
   , swingIndent  = const Swing
   , indentAmount = 2
   , maxWidth     = Just 80
   }
+
+-- | Modify the carrier type of a 'SExprPrinter' by describing how
+--   to convert the new type back to the previous type. For example,
+--   to pretty-print a well-formed s-expression, we can modify the
+--   'SExprPrinter' value as follows:
+--
+-- >>> let printer = setFromCarrier fromWellFormed (basicPrint id)
+-- >>> encodeOne printer (WFSList [WFSAtom "ele", WFSAtom "phant"])
+-- "(ele phant)"
+setFromCarrier :: (c -> b) -> SExprPrinter a b -> SExprPrinter a c
+setFromCarrier fc pr = pr { fromCarrier = fromCarrier pr . fc }
+
+-- | Dictate a maximum width for pretty-printed s-expressions.
+--
+-- >>> let printer = setMaxWidth 8 (basicPrint id)
+-- >>> encodeOne printer (L [A "one", A "two", A "three"])
+-- "(one \n  two\n  three)"
+setMaxWidth :: Int -> SExprPrinter atom carrier -> SExprPrinter atom carrier
+setMaxWidth n pr = pr { maxWidth = Just n }
+
+-- | Allow the serialized s-expression to be arbitrarily wide. This
+--   makes all pretty-printing happen on a single line.
+--
+-- >>> let printer = removeMaxWidth (basicPrint id)
+-- >>> encodeOne printer (L [A "one", A "two", A "three"])
+-- "(one two three)"
+removeMaxWidth :: SExprPrinter atom carrier -> SExprPrinter atom carrier
+removeMaxWidth pr = pr { maxWidth = Nothing }
+
+-- | Set the number of spaces that a subsequent line will be indented
+--   after a swing indentation.
+--
+-- >>> let printer = setMaxWidth 12 (basicPrint id)
+-- >>> encodeOne printer (L [A "elephant", A "pachyderm"])
+-- "(elephant \n  pachyderm)"
+-- >>> encodeOne (setIndentAmount 4) (L [A "elephant", A "pachyderm"])
+-- "(elephant \n    pachyderm)"
+setIndentAmount :: Int -> SExprPrinter atom carrier -> SExprPrinter atom carrier
+setIndentAmount n pr = pr { indentAmount = n }
+
+-- | Dictate how to indent subsequent lines based on the leading
+--   subexpression in an s-expression. For details on how this works,
+--   consult the documentation of the 'Indent' type.
+--
+-- >>> let indent (A "def") = SwingAfter 1; indent _ = Swing
+-- >>> let printer = setIndentStrategy indent (setMaxWidth 8 (basicPrint id))
+-- >>> encodeOne printer (L [ A "def", L [ A "func", A "arg" ], A "body" ])
+-- "(def (func arg)\n  body)"
+-- >>> encodeOne printer (L [ A "elephant", A "among", A "pachyderms" ])
+-- "(elephant \n  among\n  pachyderms)"
+setIndentStrategy :: (SExpr atom -> Indent) -> SExprPrinter atom carrier -> SExprPrinter atom carrier
+setIndentStrategy st pr = pr { swingIndent = st }
 
 -- Sort of like 'unlines' but without the trailing newline
 joinLines :: [Text] -> Text
@@ -111,8 +175,8 @@ indentSubsequent n (t:ts) = joinLines (t : go ts)
 
 -- | Pretty-print a 'SExpr' according to the options in a
 --   'LayoutOptions' value.
-prettyPrintSExpr :: LayoutOptions a -> SExpr a -> Text
-prettyPrintSExpr LayoutOptions { .. } = pHead 0
+prettyPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> Text
+prettyPrintSExpr SExprPrinter { .. } = pHead 0
   where pHead _   SNil         = "()"
         pHead _   (SAtom a)    = atomPrinter a
         pHead ind (SCons x xs) = gather ind x xs id
@@ -142,3 +206,14 @@ prettyPrintSExpr LayoutOptions { .. } = pHead 0
                   | Just maxAmt <- maxWidth
                   , T.length flat + ind > maxAmt = " " <> indented
                   | otherwise                    = " " <> flat
+
+-- | Turn a single s-expression into a string according to a given
+--   'SExprPrinter'.
+encodeOne :: SExprPrinter atom carrier -> carrier -> Text
+encodeOne s@(SExprPrinter { .. }) =
+  prettyPrintSExpr (s { fromCarrier = id }) . fromCarrier
+
+-- | Turn a list of s-expressions into a single string according to
+--   a given 'SExprPrinter'.
+encode :: SExprPrinter atom carrier -> [carrier] -> Text
+encode spec = T.intercalate "\n\n" . map (encodeOne spec)
