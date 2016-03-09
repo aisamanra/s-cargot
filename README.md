@@ -529,6 +529,8 @@ mkLangPrinter
   $ setIndentStrategy (const Align)
   $ basicPrint sAtom
 
+>>> decode myLangParser "(+ (* 2 20) 10) (* 10 10)"
+[EOp Add (EOp Mul (ENum 2) (ENum 20)) (ENum 10),EOp Mul (ENum 10) (ENum 10)]
 ~~~~
 
 Keep in mind that you often won't need to write all this by hand,
