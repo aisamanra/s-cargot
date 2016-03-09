@@ -454,6 +454,19 @@ with Haskell-style line comments and a special reader macro to understand hex
 literals:
 
 ~~~~.haskell
+{-# LANGUAGE OverloadedStrings #-}
+
+module SCargotExample where
+
+import Control.Applicative ((<|>))
+import Data.Char (isDigit)
+import Data.SCargot
+import Data.SCargot.Repr.Basic
+import Data.Text (Text, pack)
+import Numeric (readHex)
+import Text.Parsec (anyChar, char, digit, many1, manyTill, newline, satisfy, string)
+import Text.Parsec.Text (Parser)
+
 -- Our operators are going to represent addition, subtraction, or
 -- multiplication
 data Op = Add | Sub | Mul deriving (Eq, Show)
@@ -468,37 +481,39 @@ data Expr = EOp Op Expr Expr | ENum Int deriving (Eq, Show)
 
 -- Conversions to and from our Expr type
 toExpr :: SExpr Atom -> Either String Expr
-toExpr (A (AOp op) ::: l ::: r ::: Nil) = EOp op <$> l <*> r
+toExpr (A (AOp op) ::: l ::: r ::: Nil) = EOp op <$> toExpr l <*> toExpr r
 toExpr (A (ANum n)) = pure (ENum n)
 toExpr sexpr = Left ("Unable to parse expression: " ++ show sexpr)
 
 fromExpr :: Expr -> SExpr Atom
 fromExpr (EOp op l r) = A (AOp op) ::: fromExpr l ::: fromExpr r ::: Nil
-fromExpr (ENum n)     = ANum n
+fromExpr (ENum n)     = A (ANum n) ::: Nil
 
 -- Parser and serializer for our Atom type
 pAtom :: Parser Atom
-pAtom = ((ANum . read . T.unpack) <$> many1 isDigit)
-     <|> (char "+" *> pure (AOp Add))
-     <|> (char "-" *> pure (AOp Sub))
-     <|> (char "*" *> pure (AOp Mul))
+pAtom = ((ANum . read) <$> many1 digit)
+     <|> (char '+' *> pure (AOp Add))
+     <|> (char '-' *> pure (AOp Sub))
+     <|> (char '*' *> pure (AOp Mul))
 
 sAtom :: Atom -> Text
 sAtom (AOp Add) = "+"
 sAtom (AOp Sub) = "-"
 sAtom (AOp Mul) = "*"
-sAtom (ANum n)  = T.pack (show n)
+sAtom (ANum n)  = pack (show n)
 
 -- Our comment syntax is going to be Haskell-like:
 hsComment :: Parser ()
-hsComment = string "--" >> manyTill newline >> return ()
+hsComment = string "--" >> manyTill anyChar newline >> return ()
 
 -- Our custom reader macro: grab the parse stream and read a
 -- hexadecimal number from it:
 hexReader :: Reader Atom
-hexReader _ = (Num . readHex . T.unpack) <$> takeWhile1 isHexDigit
-  where isHexDigit c = isDigit c || c `elem` "AaBbCcDdEeFf"
-        rd = readHex . head . fst
+hexReader _ = (A . ANum . rd) <$> many1 (satisfy isHexDigit)
+  where isHexDigit c = isDigit c || c `elem` hexChars
+        rd = fst . head . readHex
+        hexChars :: String
+        hexChars = "AaBbCcDdEeFf"
 
 -- Our final s-expression parser and printer:
 myLangParser :: SExprParser Atom Expr
@@ -508,11 +523,12 @@ myLangParser
   $ setCarrier toExpr           -- convert final repr to Expr
   $ mkParser pAtom              -- create spec with Atom type
 
-mkLangPrinter :: SexprPrinter Atom Expr
+mkLangPrinter :: SExprPrinter Atom Expr
 mkLangPrinter
   = setFromCarrier fromExpr
   $ setIndentStrategy (const Align)
   $ basicPrint sAtom
+
 ~~~~
 
 Keep in mind that you often won't need to write all this by hand,
