@@ -1,3 +1,5 @@
+[![Hackage](https://img.shields.io/hackage/v/s-cargot.svg)](https://hackage.haskell.org/package/s-cargot)
+
 S-Cargot is a library for parsing and emitting S-expressions, designed
 to be flexible, customizable, and extensible. Different uses of
 S-expressions often understand subtly different variations on what an
