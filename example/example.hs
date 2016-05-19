@@ -77,12 +77,17 @@ mkLangPrinter
 
 main :: IO ()
 main = do
-  sExprText <- pack . head <$> getArgs
+  sExprText <- pack . head <$> getContents
   either putStrLn print (decode myLangParser sExprText)
 
 {-
-Exmaple usage:
+Example usage:
 
-$ dist/build/example/example "$(echo -e '(+ (* 2 20) 10) (* 10 10)')"
-[EOp Add (EOp Mul (ENum 2) (ENum 20)) (ENum 10),EOp Mul (ENum 10) (ENum 10)]
+$ dist/build/example/example <<EOF
+> -- you can put comments in the code!
+> (+ 10 (* 20 20))
+> -- and more than one s-expression!
+> (* 10 10)
+> EOF
+[EOp Add (ENum 10) (EOp Mul (ENum 20) (ENum 20)),EOp Mul (ENum 10) (ENum 10)]
 -}
