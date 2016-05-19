@@ -160,7 +160,7 @@ sexprSum :: Num a => WellFormedSExpr a -> a
 
 If you are using GHC 7.10, several of these will be powerful
 bidirectional pattern synonyms that allow both constructing and
-pattern-matchhing on s-expressions in non-trivial ways:
+pattern-matching on s-expressions in non-trivial ways:
 
 ~~~~.haskell
 >>> import Data.SCargot.Repr.Basic
@@ -219,6 +219,15 @@ Right [SCons (SAtom (Ident "foo")) (SCons (SAtom (Num 1)) SNil)]
 >>> encode mySpec [L [A (Num 0), A (Ident "bar")]]
 "(0 bar)"
 ~~~~
+
+Several common atom types appear in the module
+[`Data.SCargot.Common`](https://hackage.haskell.org/package/s-cargot-0.1.0.0/docs/Data-SCargot-Common.html),
+including various kinds of identifiers and number literals. The
+long-term plan for S-Cargot is to include more and more kinds of
+built-in atoms, in order to make putting together an S-Expression
+parser even easier. If you have a common syntax for an atom type
+that you think should be represented there, please
+[suggest it in an issue](https://github.com/aisamanra/s-cargot/issues)!
 
 ## Carrier Types
 
@@ -290,6 +299,27 @@ For example, the following adds C++-style comments to an S-expression format:
 ~~~~.haskell
 >>> let cppComment = string "//" >> manyTill newline >> return ()
 >>> decode (setComment cppComment basicParser) "(a //comment\n  b)\n"
+Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
+~~~~
+
+The
+[`Data.SCargot.Comments`](https://hackage.haskell.org/package/s-cargot/docs/Data-SCargot-Comments.html)
+module defines some helper functions for creating comment syntaxes, so the
+`cppComment` parser above could be defined as simply
+
+~~~~.haskell
+>>> let cppComment = lineComment "//"
+>>> decode (setComment cppComment basicParser) "(a //comment\n  b)\n"
+Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
+~~~~
+
+Additionally, a handful of common comment syntaxes are defined in
+[`Data.SCargot.Comments`](https://hackage.haskell.org/package/s-cargot/docs/Data-SCargot-Comments.html),
+including C-style, Haskell-style, and generic scripting-language-style
+comments, so in practice, we could write the above example as
+
+~~~~.haskell
+>>> decode (withCLikeLineComments basicParser) "(a //comment\n  b)\n"
 Right [SCons (SAtom "a") (SCons (SAtom "b") SNil)]
 ~~~~
 
