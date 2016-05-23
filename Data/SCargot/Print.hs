@@ -180,10 +180,13 @@ prettyPrintSExpr SExprPrinter { .. } = pHead 0
   where pHead _   SNil         = "()"
         pHead _   (SAtom a)    = atomPrinter a
         pHead ind (SCons x xs) = gather ind x xs id
-        gather _   _ (SAtom _)    _ = error "no dotted pretty printing yet!"
         gather ind h (SCons x xs) k = gather ind h xs (k . (x:))
-        gather ind h SNil         k = "(" <> hd <> body <> ")"
-          where hd   = indentSubsequent ind [pHead (ind+1) h]
+        gather ind h end          k = "(" <> hd <> body <> tail <> ")"
+          where tail = case end of
+                         SNil      -> ""
+                         SAtom a   -> " . " <> atomPrinter a
+                         SCons _ _ -> error "[unreachable]"
+                hd   = indentSubsequent ind [pHead (ind+1) h]
                 lst  = k []
                 flat = T.unwords (map (pHead (ind+1)) lst)
                 headWidth = T.length hd + 1
