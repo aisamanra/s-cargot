@@ -77,7 +77,7 @@ mkLangPrinter
 
 main :: IO ()
 main = do
-  sExprText <- pack . head <$> getContents
+  sExprText <- pack <$> getContents
   either putStrLn print (decode myLangParser sExprText)
 
 {-
