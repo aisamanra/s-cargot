@@ -11,6 +11,9 @@ module Data.SCargot.Comments
     -- ** Scripting Language Syntax
     -- $script
   , withOctothorpeComments
+    -- ** Prolog- or Matlab-Style Syntax
+  , withPercentComments
+  , withPercentBlockComments
     -- ** C-Style Syntax
     -- $clike
   , withCLikeLineComments
@@ -112,6 +115,15 @@ withHaskellComments = setComment (lineComment "--" <|>
 --   @#@ and last until the end of the line.
 withOctothorpeComments :: SExprParser t a -> SExprParser t a
 withOctothorpeComments = setComment (lineComment "#")
+
+-- | MATLAB, Prolog, PostScript, and others use comments which begin
+-- with @%@ and last until the end of the line.
+withPercentComments :: SExprParser t a -> SExprParser t a
+withPercentComments = setComment (lineComment "%")
+
+-- | MATLAB block comments are started with @%{@ and end with @%}@.
+withPercentBlockComments :: SExprParser t a -> SExprParser t a
+withPercentBlockComments = setComment (simpleBlockComment "%{" "%}")
 
 
 {- $intro
