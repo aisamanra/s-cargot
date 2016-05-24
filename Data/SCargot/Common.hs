@@ -1,8 +1,13 @@
 module Data.SCargot.Common ( -- $intro
-                           -- * Lisp Identifier Syntaxes
+                           -- * Identifier Syntaxes
                              parseR5RSIdent
                            , parseR6RSIdent
                            , parseR7RSIdent
+                           , parseXIDIdentStrict
+                           , parseXIDIdentGeneral
+                           , parseHaskellIdent
+                           , parseHaskellVariable
+                           , parseHaskellConstructor
                              -- * Numeric Literal Parsers
                            , signed
                            , prefixedNumber
@@ -115,6 +120,93 @@ parseR7RSIdent =  T.pack <$>
         signSub = initial <|> expSign <|> char '@'
         cons2 a b cs   = a : b : cs
         cons3 a b c ds = a : b : c : ds
+
+-- | Parse a Haskell variable identifier: a sequence of alphanumeric
+--   characters, underscores, or single quote that begins with a
+--   lower-case letter.
+parseHaskellVariable :: Parser Text
+parseHaskellVariable =
+  T.pack <$> ((:) <$> small <*> many (small <|>
+                                      large <|>
+                                      digit' <|>
+                                      char '\'' <|>
+                                      char '_'))
+  where small = satisfy isLower
+        large = satisfy isUpper
+        digit' = satisfy isDigit
+
+-- | Parse a Haskell constructor: a sequence of alphanumeric
+--   characters, underscores, or single quote that begins with an
+--   upper-case letter.
+parseHaskellConstructor :: Parser Text
+parseHaskellConstructor =
+  T.pack <$> ((:) <$> large <*> many (small <|>
+                                      large <|>
+                                      digit' <|>
+                                      char '\'' <|>
+                                      char '_'))
+  where small = satisfy isLower
+        large = satisfy isUpper
+        digit' = satisfy isDigit
+
+-- | Parse a Haskell identifer: a sequence of alphanumeric
+--   characters, underscores, or a single quote. This matches both
+--   variable and constructor names.
+parseHaskellIdent :: Parser Text
+parseHaskellIdent =
+  T.pack <$> ((:) <$> (large <|> small)
+                  <*> many (small <|>
+                            large <|>
+                            digit' <|>
+                            char '\'' <|>
+                            char '_'))
+  where small = satisfy isLower
+        large = satisfy isUpper
+        digit' = satisfy isDigit
+
+-- Ensure that a given character has the given Unicode category
+hasCat :: [GeneralCategory] -> Parser Char
+hasCat cats = satisfy (flip hasCategory cats)
+
+xidStart :: [GeneralCategory]
+xidStart = [ UppercaseLetter
+           , LowercaseLetter
+           , TitlecaseLetter
+           , ModifierLetter
+           , OtherLetter
+           , LetterNumber
+           ]
+
+xidContinue :: [GeneralCategory]
+xidContinue = xidStart ++ [ NonSpacingMark
+                          , SpacingCombiningMark
+                          , DecimalNumber
+                          , ConnectorPunctuation
+                          ]
+
+-- | Parse an identifier of unicode characters of the form
+--   @<XID_Start> <XID_Continue>*@, which corresponds strongly
+--   to the identifiers found in most C-like languages. Note that
+--   the @XID_Start@ category does not include the underscore,
+--   so @__foo@ is not a valid XID identifier. To parse
+--   identifiers that may include leading underscores, use
+--   'parseXIDIdentGeneral'.
+parseXIDIdentStrict :: Parser Text
+parseXIDIdentStrict = T.pack <$> ((:) <$> hasCat xidStart
+                                  <*> many (hasCat xidContinue))
+
+-- | Parse an identifier of unicode characters of the form
+--   @(<XID_Start> | '_') <XID_Continue>*@, which corresponds
+--   strongly to the identifiers found in most C-like languages.
+--   Unlike 'parseXIDIdentStrict', this will also accept an
+--   underscore as leading character, which corresponds more
+--   closely to programming languages like C and Java, but
+--   deviates somewhat from the
+--   <http://unicode.org/reports/tr31/ Unicode Identifier and
+--   Pattern Syntax standard>.
+parseXIDIdentGeneral :: Parser Text
+parseXIDIdentGeneral = T.pack <$> ((:) <$> (hasCat xidStart <|> char '_')
+                                       <*> many (hasCat xidContinue))
 
 -- | A helper function for defining parsers for arbitrary-base integers.
 --   The first argument will be the base, and the second will be the
