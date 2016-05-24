@@ -48,10 +48,9 @@ library
   ghc-options:         -Wall
 
 executable example
-  if flag(build-example)
-    main-is:           example.hs
-  else
+  if !flag(build-example)
     buildable:         False
+  main-is:           example.hs
   hs-source-dirs:      example
   build-depends:       base        >=4.7 && <5,
                        containers  >=0.5 && <1,
