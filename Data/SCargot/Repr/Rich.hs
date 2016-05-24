@@ -107,6 +107,7 @@ cons x (R.RSAtom a)      = R.RSDotted [x] a
 --
 -- >>> A "one" ::: L [A "two", A "three"]
 -- RSList [RSAtom "one",RSAtom "two",RSAtom "three"]
+pattern (:::) :: RichSExpr a -> RichSExpr a -> RichSExpr a
 pattern x ::: xs <- (uncons -> Just (x, xs))
 #if MIN_VERSION_base(4,8,0)
   where x ::: xs = cons x xs
@@ -116,24 +117,28 @@ pattern x ::: xs <- (uncons -> Just (x, xs))
 --
 -- >>> A "elephant"
 -- RSAtom "elephant"
-pattern A a       = R.RSAtom a
+pattern A :: a -> RichSExpr a
+pattern A a = R.RSAtom a
 
 -- | A shorter alias for `RSList`
 --
 -- >>> L [A "pachy", A "derm"]
 -- RSList [RSAtom "pachy",RSAtom "derm"]
-pattern L xs      = R.RSList xs
+pattern L :: [RichSExpr a] -> RichSExpr a
+pattern L xs = R.RSList xs
 
 -- | A shorter alias for `RSDotted`
 --
 -- >>> DL [A "pachy"] "derm"
 -- RSDotted [RSAtom "pachy"] "derm"
+pattern DL :: [RichSExpr a] -> a -> RichSExpr a
 pattern DL xs x = R.RSDotted xs x
 
 -- | A shorter alias for `RSList` @[]@
 --
 -- >>> Nil
 -- RSList []
+pattern Nil :: RichSExpr a
 pattern Nil = R.RSList []
 
 -- | Utility function for parsing a pair of things: this parses a two-element list,

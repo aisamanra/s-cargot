@@ -59,24 +59,28 @@ cons x (R.WFSList xs) = Just (R.WFSList (x:xs))
 --   instead.
 --
 -- >>> let sum (x ::: xs) = x + sum xs; sum Nil = 0
+pattern (:::) :: WellFormedSExpr a -> WellFormedSExpr a -> WellFormedSExpr a
 pattern x ::: xs <- (uncons -> Just (x, xs))
 
 -- | A shorter alias for `WFSList`
 --
 -- >>> L [A "pachy", A "derm"]
 -- WFSList [WFSAtom "pachy",WFSAtom "derm"]
+pattern L :: [WellFormedSExpr t] -> WellFormedSExpr t
 pattern L xs = R.WFSList xs
 
 -- | A shorter alias for `WFSAtom`
 --
 -- >>> A "elephant"
 -- WFSAtom "elephant"
+pattern A :: t -> WellFormedSExpr t
 pattern A a  = R.WFSAtom a
 
 -- | A shorter alias for `WFSList` @[]@
 --
 -- >>> Nil
 -- WFSList []
+pattern Nil :: WellFormedSExpr t
 pattern Nil = R.WFSList []
 
 getShape :: WellFormedSExpr a -> String

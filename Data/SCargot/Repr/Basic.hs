@@ -72,14 +72,6 @@ uncons _            = Nothing
 cons :: SExpr a -> SExpr a -> SExpr a
 cons = SCons
 
-mkList :: [SExpr a] -> SExpr a
-mkList []     = SNil
-mkList (x:xs) = SCons x (mkList xs)
-
-mkDList :: [SExpr a] -> a -> SExpr a
-mkDList []     a = SAtom a
-mkDList (x:xs) a = SCons x (mkDList xs a)
-
 gatherDList :: SExpr a -> Maybe ([SExpr a], a)
 gatherDList SNil     = Nothing
 gatherDList SAtom {} = Nothing
@@ -96,37 +88,44 @@ infixr 5 :::
 --
 -- >>> A "pachy" ::: A "derm"
 -- SCons (SAtom "pachy") (SAtom "derm")
+pattern (:::) :: SExpr a -> SExpr a -> SExpr a
 pattern x ::: xs = SCons x xs
 
 -- | A shorter alias for `SAtom`
 --
 -- >>> A "elephant"
 -- SAtom "elephant"
+pattern A :: a -> SExpr a
 pattern A x = SAtom x
 
 -- | A (slightly) shorter alias for `SNil`
 --
 -- >>> Nil
 -- SNil
+pattern Nil :: SExpr a
 pattern Nil = SNil
 
 -- | An alias for matching a proper list.
 --
 -- >>> L [A "pachy", A "derm"]
--- SCons (SAtom "pachy") (SCons (SAtom "derm") SNil)
+-- SExpr (SAtom "pachy") (SExpr (SAtom "derm") SNil)
+pattern L :: [SExpr a] -> SExpr a
 pattern L xs <- (gatherList -> Right xs)
 #if MIN_VERSION_base(4,8,0)
-  where L xs = mkList xs
+  where L []     = SNil
+        L (x:xs) = SCons x (L xs)
 #endif
 
 
 -- | An alias for matching a dotted list.
 --
 -- >>> DL [A "pachy"] A "derm"
--- SCons (SAtom "pachy") (SAtom "derm")
+-- SExpr (SAtom "pachy") (SAtom "derm")
+pattern DL :: [SExpr a] -> a -> SExpr a
 pattern DL xs x <- (gatherDList -> Just (xs, x))
 #if MIN_VERSION_base(4,8,0)
-  where DL xs x = mkDList xs x
+  where DL []     a = SAtom a
+        DL (x:xs) a = SCons x (DL xs a)
 #endif
 
 getShape :: SExpr a -> String

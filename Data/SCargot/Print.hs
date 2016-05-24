@@ -181,8 +181,8 @@ prettyPrintSExpr SExprPrinter { .. } = pHead 0
         pHead _   (SAtom a)    = atomPrinter a
         pHead ind (SCons x xs) = gather ind x xs id
         gather ind h (SCons x xs) k = gather ind h xs (k . (x:))
-        gather ind h end          k = "(" <> hd <> body <> tail <> ")"
-          where tail = case end of
+        gather ind h end          k = "(" <> hd <> body <> tl <> ")"
+          where tl   = case end of
                          SNil      -> ""
                          SAtom a   -> " . " <> atomPrinter a
                          SCons _ _ -> error "[unreachable]"
