@@ -2,3 +2,7 @@
 .cabal-sandbox
 dist
 cabal.sandbox.config
+dist-newstyle
+stack.yaml
+.stack-work
+cabal.project.local
