@@ -22,11 +22,15 @@ module Data.SCargot.Common ( -- $intro
                            , signedDozNumber
                            , hexNumber
                            , signedHexNumber
+                             -- ** Numeric Literals for Arbitrary Bases
+                           , commonLispNumberAnyBase
+                           , gnuM4NumberAnyBase
                            ) where
 
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative hiding ((<|>), many)
 #endif
+import           Control.Monad (guard)
 import           Data.Char
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -215,16 +219,44 @@ number :: Integer -> Parser Char -> Parser Integer
 number base digits = foldl go 0 <$> many1 digits
   where go x d = base * x + toInteger (value d)
         value c
-          | c == 'a' || c == 'A' = 0xa
-          | c == 'b' || c == 'B' = 0xb
-          | c == 'c' || c == 'C' = 0xc
-          | c == 'd' || c == 'D' = 0xd
-          | c == 'e' || c == 'E' = 0xe
-          | c == 'f' || c == 'F' = 0xf
+          | c >= 'a' && c <= 'z' = 0xa + (fromEnum c - fromEnum 'a')
+          | c >= 'A' && c <= 'Z' = 0xa + (fromEnum c - fromEnum 'A')
           | c >= '0' && c <= '9' = fromEnum c - fromEnum '0'
           | c == '\x218a' = 0xa
           | c == '\x218b' = 0xb
           | otherwise = error ("Unknown letter in number: " ++ show c)
+
+digitsFor :: Int -> [Char]
+digitsFor n
+  | n <= 10   = take n ['0'..'9']
+  | n <= 36   = take (n-10) ['A'..'Z'] ++ take (n-10) ['a'..'z'] ++ ['0'..'9']
+  | otherwise = error ("Invalid base for parser: " ++ show n)
+
+anyBase :: Integer -> Parser Integer
+anyBase n = number n (oneOf (digitsFor (fromIntegral n)))
+
+-- | A parser for Common Lisp's arbitrary-base number syntax, of
+--   the form @#[base]r[number]@, where the base is given in
+--   decimal. Note that this syntax begins with a @#@, which
+--   means it might conflict with defined reader macros.
+commonLispNumberAnyBase :: Parser Integer
+commonLispNumberAnyBase = do
+  _ <- char '#'
+  n <- decNumber
+  guard (n >= 2 && n <= 36)
+  _ <- char 'r'
+  signed (anyBase n)
+
+-- | A parser for GNU m4's arbitrary-base number syntax, of
+--   the form @0r[base]:[number]@, where the base is given in
+--   decimal.
+gnuM4NumberAnyBase :: Parser Integer
+gnuM4NumberAnyBase = do
+  _ <- string "0r"
+  n <- decNumber
+  guard (n >= 2 && n <= 36)
+  _ <- char ':'
+  signed (anyBase n)
 
 sign :: Num a => Parser (a -> a)
 sign =  (pure id     <* char '+')
