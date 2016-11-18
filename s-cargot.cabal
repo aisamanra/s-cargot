@@ -35,6 +35,7 @@ library
                        Data.SCargot.Repr.WellFormed,
                        Data.SCargot.Parse,
                        Data.SCargot.Print,
+                       Data.SCargot.Atom,
                        Data.SCargot.Comments,
                        Data.SCargot.Common,
                        Data.SCargot.Language.Basic,
