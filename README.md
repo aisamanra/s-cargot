@@ -171,7 +171,6 @@ As pointed out above, there are three different "carrier" types that are used to
 
 ~~~~.haskell
 import           Data.Char (isDigit)
-import           Data.SCargot.General
 import           Data.Text (Text)
 import qualified Data.Text as T
 
