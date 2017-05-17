@@ -88,28 +88,36 @@ infixr 5 :::
 --
 -- >>> A "pachy" ::: A "derm"
 -- SCons (SAtom "pachy") (SAtom "derm")
+#if MIN_VERSION_base(4,8,0)
 pattern (:::) :: SExpr a -> SExpr a -> SExpr a
+#endif
 pattern x ::: xs = SCons x xs
 
 -- | A shorter alias for `SAtom`
 --
 -- >>> A "elephant"
 -- SAtom "elephant"
+#if MIN_VERSION_base(4,8,0)
 pattern A :: a -> SExpr a
+#endif
 pattern A x = SAtom x
 
 -- | A (slightly) shorter alias for `SNil`
 --
 -- >>> Nil
 -- SNil
+#if MIN_VERSION_base(4,8,0)
 pattern Nil :: SExpr a
+#endif
 pattern Nil = SNil
 
 -- | An alias for matching a proper list.
 --
 -- >>> L [A "pachy", A "derm"]
 -- SExpr (SAtom "pachy") (SExpr (SAtom "derm") SNil)
+#if MIN_VERSION_base(4,8,0)
 pattern L :: [SExpr a] -> SExpr a
+#endif
 pattern L xs <- (gatherList -> Right xs)
 #if MIN_VERSION_base(4,8,0)
   where L []     = SNil
@@ -121,7 +129,9 @@ pattern L xs <- (gatherList -> Right xs)
 --
 -- >>> DL [A "pachy"] A "derm"
 -- SExpr (SAtom "pachy") (SAtom "derm")
+#if MIN_VERSION_base(4,8,0)
 pattern DL :: [SExpr a] -> a -> SExpr a
+#endif
 pattern DL xs x <- (gatherDList -> Just (xs, x))
 #if MIN_VERSION_base(4,8,0)
   where DL []     a = SAtom a
