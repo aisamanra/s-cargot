@@ -159,7 +159,7 @@ data Atom
     deriving (Eq, Show)
 
 myParser :: SExprParser Atom (SExpr Atom)
-myParser = mkParserFromAtoms
+myParser = mkAtomParser
   [ atom Ident parseR7RSIdent
   , atom Num   signedDecNumber
   ]
