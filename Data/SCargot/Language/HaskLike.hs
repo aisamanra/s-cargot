@@ -5,6 +5,10 @@ module Data.SCargot.Language.HaskLike
     HaskLikeAtom(..)
   , haskLikeParser
   , haskLikePrinter
+    -- * Individual Parsers
+  , parseHaskellString
+  , parseHaskellFloat
+  , parseHaskellInt
   ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -51,8 +55,8 @@ data HaskLikeAtom
 instance IsString HaskLikeAtom where
   fromString = HSIdent . fromString
 
-pString :: Parser Text
-pString = pack . catMaybes <$> between (char '"') (char '"') (many (val <|> esc))
+parseHaskellString :: Parser Text
+parseHaskellString = pack . catMaybes <$> between (char '"') (char '"') (many (val <|> esc))
   where val = Just <$> satisfy (\ c -> c /= '"' && c /= '\\' && c > '\026')
         esc = do _ <- char '\\'
                  Nothing <$ (gap <|> char '&') <|>
@@ -81,8 +85,8 @@ asciiMap = zip
    "\STX\ETX\EOT\ENQ\ACK\BEL\DLE\DC1\DC2\DC3\DC4\NAK" ++
    "\SYN\ETB\CAN\SUB\ESC\DEL")
 
-pFloat :: Parser Double
-pFloat = do
+parseHaskellFloat :: Parser Double
+parseHaskellFloat = do
   n <- decNumber
   withDot n <|> noDot n
   where withDot n = do
@@ -105,8 +109,8 @@ pFloat = do
 power :: Num a => Parser (a -> a)
 power = negate <$ char '-' <|> id <$ char '+' <|> return id
 
-pInt :: Parser Integer
-pInt = do
+parseHaskellInt :: Parser Integer
+parseHaskellInt = do
   s <- power
   n <- pZeroNum <|> decNumber
   return (fromIntegral (s n))
@@ -121,9 +125,9 @@ pZeroNum = char '0' >>
 
 pHaskLikeAtom :: Parser HaskLikeAtom
 pHaskLikeAtom
-   =  HSFloat   <$> (try pFloat     <?> "float")
-  <|> HSInt     <$> (try pInt       <?> "integer")
-  <|> HSString  <$> (pString        <?> "string literal")
+   =  HSFloat   <$> (try parseHaskellFloat <?> "float")
+  <|> HSInt     <$> (try parseHaskellInt   <?> "integer")
+  <|> HSString  <$> (parseHaskellString    <?> "string literal")
   <|> HSIdent   <$> (parseR5RSIdent <?> "token")
 
 sHaskLikeAtom :: HaskLikeAtom -> Text
