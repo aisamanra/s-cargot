@@ -78,7 +78,7 @@ These names and patterns can be quite long, especially when you're constructing 
 ~~~~.haskell
 >>> import Data.SCargot.Repr.Basic
 >>> A 2 ::: A 3 ::: A 4 ::: Nil
-SCons (SAtom 2) (SCons (SAtom 3) (SComs (SAtom 4) SNil))
+SCons (SAtom 2) (SCons (SAtom 3) (SCons (SAtom 4) SNil))
 ~~~~
 
 ~~~~.haskell
@@ -97,7 +97,7 @@ If you are using GHC 7.10 or later, several of these will be powerful bidirectio
 ~~~~.haskell
 >>> import Data.SCargot.Repr.Basic
 >>> L [ A 2, A 3, A 4 ]
-SCons (SAtom 2) (SCons (SAtom 3) (SComs (SAtom 4) SNil))
+SCons (SAtom 2) (SCons (SAtom 3) (SCons (SAtom 4) SNil))
 ~~~~
 
 ## Atom Types
@@ -171,7 +171,6 @@ As pointed out above, there are three different "carrier" types that are used to
 
 ~~~~.haskell
 import           Data.Char (isDigit)
-import           Data.SCargot.General
 import           Data.Text (Text)
 import qualified Data.Text as T
 
