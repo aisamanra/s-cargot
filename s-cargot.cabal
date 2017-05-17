@@ -18,6 +18,7 @@ copyright:           2015 Getty Ritter
 category:            Data
 build-type:          Simple
 cabal-version:       >=1.10
+bug-reports:         https://github.com/aisamanra/config-ini/issues
 
 source-repository head
   type: git
