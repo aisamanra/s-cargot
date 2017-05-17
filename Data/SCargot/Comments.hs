@@ -48,8 +48,8 @@ import            Data.SCargot.Parse ( Comment
 lineComment :: String -> Comment
 lineComment s = string s >> skipMany (noneOf "\n") >> return ()
 
--- | Given two strings, a begin and an end delimeter, produce a
---   parser that matches the beginning delimeter and then ignores
+-- | Given two strings, a begin and an end delimiter, produce a
+--   parser that matches the beginning delimiter and then ignores
 --   everything until it finds the end delimiter. This does not
 --   consider nesting, so, for example, a comment created with
 --
