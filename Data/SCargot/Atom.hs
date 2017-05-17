@@ -1,5 +1,7 @@
 module Data.SCargot.Atom
-  ( atom
+  ( -- $intro
+
+    atom
   , mkAtomParser
   ) where
 
@@ -18,3 +20,21 @@ atom = fmap
 --   possible atom parsers, which will be tried in sequence before failing.
 mkAtomParser :: [Parser atom] -> SExprParser atom (SExpr atom)
 mkAtomParser = mkParser . choice
+
+{- $intro
+
+This module defines small convenience functions for building an atom
+type from several individual parsers. This is easy to do without these
+functions, but these functions communicate intent more directly:
+
+> data Atom
+>   = Ident Text
+>   | Num Integer
+>
+> myParser :: SExprParser Atom (SExpr Atom)
+> myParser = mkAtomParser
+>   [ atom Ident parseR7RSIdent
+>   , atom Num   signedDecNumber
+>   ]
+
+-}
