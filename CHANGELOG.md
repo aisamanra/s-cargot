@@ -9,6 +9,8 @@ v0.1.2.0
     * Added syntaxes for arbitrary-base numeric literals in the style of
       Common Lisp and M4
 * Added a suite of basic QuickCheck tests
+* Compatibility fix: GHC 7.8 didn't allow type signatures on pattern
+  synonyms.
 
 
 v0.1.1.0
