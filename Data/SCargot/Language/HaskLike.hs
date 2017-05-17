@@ -28,12 +28,13 @@ import Data.SCargot (SExprParser, SExprPrinter, mkParser, flatPrint)
 
 {- $info
 
-This module is intended for simple, ad-hoc configuration or data formats
-that might not need their on rich structure but might benefit from a few
-various kinds of literals. The 'haskLikeParser' understands identifiers as
-defined by R5RS, as well as string, integer, and floating-point literals
-as defined by the Haskell spec. It does __not__ natively understand other
-data types, such as booleans, vectors, bitstrings.
+This module is intended for simple, ad-hoc configuration or data
+formats that might not need their on rich structure but might benefit
+from a few various kinds of literals. The 'haskLikeParser' understands
+identifiers as defined by R5RS, as well as string, integer, and
+floating-point literals as defined by the Haskell 2010 spec. It does
+__not__ natively understand other data types, such as booleans,
+vectors, bitstrings.
 
 -}
 
@@ -55,6 +56,8 @@ data HaskLikeAtom
 instance IsString HaskLikeAtom where
   fromString = HSIdent . fromString
 
+-- | Parse a Haskell string literal as defined by the Haskell 2010
+-- language specification.
 parseHaskellString :: Parser Text
 parseHaskellString = pack . catMaybes <$> between (char '"') (char '"') (many (val <|> esc))
   where val = Just <$> satisfy (\ c -> c /= '"' && c /= '\\' && c > '\026')
@@ -85,6 +88,8 @@ asciiMap = zip
    "\STX\ETX\EOT\ENQ\ACK\BEL\DLE\DC1\DC2\DC3\DC4\NAK" ++
    "\SYN\ETB\CAN\SUB\ESC\DEL")
 
+-- | Parse a Haskell floating-point number as defined by the Haskell
+-- 2010 language specification.
 parseHaskellFloat :: Parser Double
 parseHaskellFloat = do
   n <- decNumber
@@ -109,6 +114,8 @@ parseHaskellFloat = do
 power :: Num a => Parser (a -> a)
 power = negate <$ char '-' <|> id <$ char '+' <|> return id
 
+-- | Parse a Haskell integer literal as defined by the Haskell 2010
+-- language specification.
 parseHaskellInt :: Parser Integer
 parseHaskellInt = do
   s <- power
