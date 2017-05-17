@@ -1,5 +1,5 @@
 name:                s-cargot
-version:             0.1.1.1
+version:             0.1.2.0
 synopsis:            A flexible, extensible s-expression library.
 homepage:            https://github.com/aisamanra/s-cargot
 description:         S-Cargot is a library for working with s-expressions in
