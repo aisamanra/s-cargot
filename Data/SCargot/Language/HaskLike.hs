@@ -9,6 +9,7 @@ module Data.SCargot.Language.HaskLike
   , parseHaskellString
   , parseHaskellFloat
   , parseHaskellInt
+  , locatedHaskLikeParser
   ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -156,6 +157,17 @@ sHaskLikeAtom (HSFloat f)  = pack (show f)
 -- Right [SCons (SAtom (HSInt 1)) (SCons (SAtom (HSString "elephant")) SNil)]
 haskLikeParser :: SExprParser HaskLikeAtom (SExpr HaskLikeAtom)
 haskLikeParser = mkParser pHaskLikeAtom
+
+-- | A 'haskLikeParser' which produces 'Located' values
+--
+-- >>> decode locatedHaskLikeParser $ pack "(0x01 \"\\x65lephant\")"
+-- Right [SCons (SAtom (At (Span (line 1, column 2) (line 1, column 6)) (HSInt 1))) (SCons (SAtom (At (Span (line 1, column 7) (line 1, column 20)) (HSString "elephant"))) SNil)]
+--
+-- >>> decode locatedHaskLikeParser $ pack "(1 elephant)"
+-- Right [SCons (SAtom (At (Span (line 1, column 2) (line 1, column 3)) (HSInt 1))) (SCons (SAtom (At (Span (line 1, column 4) (line 1, column 12)) (HSIdent "elephant"))) SNil)]
+locatedHaskLikeParser :: SExprParser (Located HaskLikeAtom) (SExpr (Located HaskLikeAtom))
+locatedHaskLikeParser = mkParser $ located pHaskLikeAtom
+
 
 -- | This 'SExprPrinter' emits s-expressions that contain Scheme-like
 --   tokens as well as string literals, integer literals, and floating-point
