@@ -26,7 +26,7 @@ module Data.SCargot.Common ( -- $intro
                            , commonLispNumberAnyBase
                            , gnuM4NumberAnyBase
                              -- ** Source locations
-                           , Location(..), Located(..), located
+                           , Location(..), Located(..), located, dLocation
                            ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -37,6 +37,7 @@ import           Data.Char
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Text.Parsec
+import           Text.Parsec.Pos  (newPos)
 import           Text.Parsec.Text (Parser)
 
 -- | Parse an identifier according to the R5RS Scheme standard. This
@@ -353,6 +354,10 @@ located parser = do
   end <- getPosition
   return $ At (Span begin end) result
 
+-- | A default location value
+dLocation :: Location
+dLocation = Span dPos dPos
+  where dPos = newPos "" 0 0
 
 {- $intro
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Data.SCargot.Language.HaskLike
@@ -56,6 +57,9 @@ data HaskLikeAtom
 
 instance IsString HaskLikeAtom where
   fromString = HSIdent . fromString
+
+instance IsString (Located HaskLikeAtom) where
+  fromString = (At dLocation) . HSIdent . fromString
 
 -- | Parse a Haskell string literal as defined by the Haskell 2010
 -- language specification.
