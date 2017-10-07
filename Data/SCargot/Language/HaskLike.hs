@@ -6,11 +6,12 @@ module Data.SCargot.Language.HaskLike
     HaskLikeAtom(..)
   , haskLikeParser
   , haskLikePrinter
+  , locatedHaskLikeParser
+  , locatedHaskLikePrinter
     -- * Individual Parsers
   , parseHaskellString
   , parseHaskellFloat
   , parseHaskellInt
-  , locatedHaskLikeParser
   ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -172,7 +173,6 @@ haskLikeParser = mkParser pHaskLikeAtom
 locatedHaskLikeParser :: SExprParser (Located HaskLikeAtom) (SExpr (Located HaskLikeAtom))
 locatedHaskLikeParser = mkParser $ located pHaskLikeAtom
 
-
 -- | This 'SExprPrinter' emits s-expressions that contain Scheme-like
 --   tokens as well as string literals, integer literals, and floating-point
 --   literals, which will be emitted as the literals produced by Haskell's
@@ -183,3 +183,18 @@ locatedHaskLikeParser = mkParser $ located pHaskLikeAtom
 -- "(1 \"elephant\")"
 haskLikePrinter :: SExprPrinter HaskLikeAtom (SExpr HaskLikeAtom)
 haskLikePrinter = flatPrint sHaskLikeAtom
+
+-- | Ignore location tags when packing values into text
+sLocatedHasklikeAtom :: Located HaskLikeAtom -> Text
+sLocatedHasklikeAtom (At _loc e) = sHaskLikeAtom e
+
+-- | A 'SExprPrinter' for 'Located' values. Works exactly like 'haskLikePrinter'
+--   It ignores the location tags when printing the result.
+--
+-- >>> let (Right dec) = decode locatedHaskLikeParser $ pack "(1 elephant)"
+-- [SCons (SAtom (At (Span (line 1, column 2) (line 1, column 3)) (HSInt 1))) (SCons (SAtom (At (Span (line 1, column 4) (line 1, column 12)) (HSIdent "elephant"))) SNil)]
+--
+-- >>> encode locatedHaskLikePrinter dec
+-- "(1 elephant)"
+locatedHaskLikePrinter :: SExprPrinter (Located HaskLikeAtom) (SExpr (Located HaskLikeAtom))
+locatedHaskLikePrinter = flatPrint sLocatedHasklikeAtom
