@@ -6,6 +6,7 @@ module Data.SCargot.Language.Basic
     basicParser
   , basicPrinter
   , locatedBasicParser
+  , locatedBasicPrinter
   ) where
 
 import           Control.Applicative ((<$>))
@@ -15,7 +16,7 @@ import           Data.Text (Text, pack)
 import           Data.Functor.Identity (Identity)
 import           Text.Parsec.Prim (ParsecT)
 
-import           Data.SCargot.Common (Located, located)
+import           Data.SCargot.Common (Located(..), located)
 import           Data.SCargot.Repr.Basic (SExpr)
 import           Data.SCargot ( SExprParser
                               , SExprPrinter
@@ -68,3 +69,15 @@ locatedBasicParser = mkParser $ located pToken
 -- "(1 elephant)"
 basicPrinter :: SExprPrinter Text (SExpr Text)
 basicPrinter = flatPrint id
+
+-- | A 'SExprPrinter' for 'Located' values. Works exactly like 'basicPrinter'
+--   It ignores the location tags when printing the result.
+--
+-- >>> let (Right dec) = decode locatedBasicParser $ pack "(1 elephant)"
+-- [SCons (SAtom (At (Span (line 1, column 2) (line 1, column 3)) "1")) (SCons (SAtom (At (Span (line 1, column 4) (line 1, column 12)) "elephant")) SNil)]
+--
+-- >>> encode locatedBasicPrinter dec
+-- "(1 elephant)"
+locatedBasicPrinter :: SExprPrinter (Located Text) (SExpr (Located Text))
+locatedBasicPrinter = flatPrint unLoc
+  where unLoc (At _loc e) = e
