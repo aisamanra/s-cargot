@@ -25,6 +25,8 @@ module Data.SCargot.Common ( -- $intro
                              -- ** Numeric Literals for Arbitrary Bases
                            , commonLispNumberAnyBase
                            , gnuM4NumberAnyBase
+                             -- ** Source locations
+                           , Location(..), Located(..), located, dLocation
                            ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -35,6 +37,7 @@ import           Data.Char
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Text.Parsec
+import           Text.Parsec.Pos  (newPos)
 import           Text.Parsec.Text (Parser)
 
 -- | Parse an identifier according to the R5RS Scheme standard. This
@@ -331,6 +334,30 @@ hexNumber = number 16 hexDigit
 -- | A parser for signed hexadecimal numbers, with an optional leading @+@ or @-@.
 signedHexNumber :: Parser Integer
 signedHexNumber = ($) <$> sign <*> hexNumber
+
+
+-- |
+data Location = Span !SourcePos !SourcePos
+  deriving (Eq, Ord, Show)
+
+-- | Add support for source locations while parsing S-expressions, as described in this
+--   <https://www.reddit.com/r/haskell/comments/4x22f9/labelling_ast_nodes_with_locations/d6cmdy9/ Reddit>
+-- thread.
+data Located a = At !Location a
+  deriving (Eq, Ord, Show)
+
+-- | Adds a source span to a parser.
+located :: Parser a -> Parser (Located a)
+located parser = do
+  begin <- getPosition
+  result <- parser
+  end <- getPosition
+  return $ At (Span begin end) result
+
+-- | A default location value
+dLocation :: Location
+dLocation = Span dPos dPos
+  where dPos = newPos "" 0 0
 
 {- $intro
 
