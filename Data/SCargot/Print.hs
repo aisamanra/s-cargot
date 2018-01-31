@@ -22,6 +22,8 @@ module Data.SCargot.Print
 import           Data.Monoid ((<>))
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Builder as B
 
 import           Data.SCargot.Repr
 
@@ -176,39 +178,103 @@ indentSubsequent n (t:ts) = joinLines (t : go ts)
 -- | Pretty-print a 'SExpr' according to the options in a
 --   'LayoutOptions' value.
 prettyPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> Text
-prettyPrintSExpr SExprPrinter { .. } = pHead 0
-  where pHead _   SNil         = "()"
-        pHead _   (SAtom a)    = atomPrinter a
-        pHead ind (SCons x xs) = gather ind x xs id
-        gather ind h (SCons x xs) k = gather ind h xs (k . (x:))
-        gather ind h end          k = "(" <> hd <> body <> tl <> ")"
-          where tl   = case end of
-                         SNil      -> ""
-                         SAtom a   -> " . " <> atomPrinter a
-                         SCons _ _ -> error "[unreachable]"
-                hd   = indentSubsequent ind [pHead (ind+1) h]
-                lst  = k []
-                flat = T.unwords (map (pHead (ind+1)) lst)
-                headWidth = T.length hd + 1
-                indented =
-                  case swingIndent h of
-                    SwingAfter n ->
-                      let (l, ls) = splitAt n lst
-                          t  = T.unwords (map (pHead (ind+1)) l)
-                          ts = indentAll (ind + indentAmount)
-                                 (map (pHead (ind + indentAmount)) ls)
-                      in t <> ts
-                    Swing ->
-                      indentAll (ind + indentAmount)
-                        (map (pHead (ind + indentAmount)) lst)
-                    Align ->
-                      indentSubsequent (ind + headWidth + 1)
-                        (map (pHead (ind + headWidth + 1)) lst)
-                body
-                  | length lst == 0              = ""
-                  | Just maxAmt <- maxWidth
-                  , T.length flat + ind > maxAmt = " " <> indented
-                  | otherwise                    = " " <> flat
+prettyPrintSExpr pr@SExprPrinter { .. } expr = case maxWidth of
+  Nothing -> flatPrintSExpr (fmap atomPrinter (fromCarrier expr))
+  Just _  -> indentPrintSExpr pr expr
+
+indentPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> Text
+indentPrintSExpr SExprPrinter { .. } = pHead 0
+  where
+    pHead _   SNil         = "()"
+    pHead _   (SAtom a)    = atomPrinter a
+    pHead ind (SCons x xs) = gather ind x xs id
+    gather ind h (SCons x xs) k = gather ind h xs (k . (x:))
+    gather ind h end          k = "(" <> hd <> body <> tl <> ")"
+      where tl   = case end of
+                     SNil      -> ""
+                     SAtom a   -> " . " <> atomPrinter a
+                     SCons _ _ -> error "[unreachable]"
+            hd   = indentSubsequent ind [pHead (ind+1) h]
+            lst  = k []
+            flat = T.unwords (map (pHead (ind+1)) lst)
+            headWidth = T.length hd + 1
+            indented =
+              case swingIndent h of
+                SwingAfter n ->
+                  let (l, ls) = splitAt n lst
+                      t  = T.unwords (map (pHead (ind+1)) l)
+                      ts = indentAll (ind + indentAmount)
+                           (map (pHead (ind + indentAmount)) ls)
+                  in t <> ts
+                Swing ->
+                  indentAll (ind + indentAmount)
+                  (map (pHead (ind + indentAmount)) lst)
+                Align ->
+                  indentSubsequent (ind + headWidth + 1)
+                  (map (pHead (ind + headWidth + 1)) lst)
+            body
+              | length lst == 0              = ""
+              | Just maxAmt <- maxWidth
+              , T.length flat + ind > maxAmt = " " <> indented
+              | otherwise = " " <> flat
+
+  -- where
+  --   -- this is the base-case that knows how to print empty lists and
+  --   -- atoms
+  --   pHead _   SNil         = B.fromString "()"
+  --   pHead _   (SAtom a)    = B.fromText a
+  --   pHead ind (SCons x xs) = gather ind x xs id 0
+
+  --   -- otherwise, we trawl through the list grabbing every element...
+  --   gather ind h (SCons x xs) k r = gather ind h xs (k . (x:)) (r + T.length x)
+  --   gather ind h end          k r = B.fromString "(" <> hd <> body <> tl <> B.fromString ")"
+  --     where
+  --       tl   = case end of
+  --                SNil      -> mempty
+  --                SAtom a   -> B.fromString " . " <> B.fromText a
+  --                SCons _ _ -> error "[unreachable]"
+  --       hd   = indentSubsequent ind [pHead (ind+1) h]
+  --       lst  = k []
+  --       flat = T.unwords (map (pHead (ind+1)) lst)
+  --       headWidth = T.length hd + 1
+  --       indented =
+  --         case swingIndent h of
+  --           SwingAfter n ->
+  --             let (l, ls) = splitAt n lst
+  --                 t  = T.unwords (map (pHead (ind+1)) l)
+  --                 ts = indentAll (ind + indentAmount)
+  --                                (map (pHead (ind + indentAmount)) ls)
+  --             in t <> ts
+  --           Swing ->
+  --             indentAll (ind + indentAmount)
+  --               (map (pHead (ind + indentAmount)) lst)
+  --           Align ->
+  --             indentSubsequent (ind + headWidth + 1)
+  --               (map (pHead (ind + headWidth + 1)) lst)
+  --       body
+  --         | length lst == 0              = B.fromString ""
+  --         | Just maxAmt <- maxWidth
+  --         , T.length flat + ind > maxAmt = B.fromString " " <> indented
+  --         | otherwise                    = B.fromString " " <> flat
+
+-- if we don't indent anything, then we can ignore a bunch of the
+-- details above
+flatPrintSExpr :: SExpr Text -> Text
+flatPrintSExpr = TL.toStrict . B.toLazyText . pHead
+  where
+    pHead (SCons x xs) =
+      B.fromString "(" <> pHead x <> pTail xs
+    pHead (SAtom t)    =
+      B.fromText t
+    pHead SNil         =
+      B.fromString "()"
+
+    pTail (SCons x xs) =
+      B.fromString " " <> pHead x <> pTail xs
+    pTail (SAtom t) =
+      B.fromString " . " <> B.fromText t <> B.fromString ")"
+    pTail SNil =
+      B.fromString ")"
 
 -- | Turn a single s-expression into a string according to a given
 --   'SExprPrinter'.
