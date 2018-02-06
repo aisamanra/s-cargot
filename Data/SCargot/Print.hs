@@ -232,8 +232,17 @@ data PPS = PPS { indentWc :: Int
                }
          deriving Show
 
-data SElem = SText T.Text | SSingle SElem | SPair SElem SElem | SDecl SElem [SElem]
+data SElem = SText Int T.Text
+           | SSingle Int SElem
+           | SPair Int SElem SElem
+           | SDecl Int SElem [SElem]
              deriving (Show, Eq)
+
+sElemSize :: SElem -> Int
+sElemSize (SText n _) = n
+sElemSize (SSingle n _) = n
+sElemSize (SPair n _ _) = n
+sElemSize (SDecl n _ _) = n
 
 tryFirstArgSameLine = True
 maxLeftForArgOnSame = 4
@@ -249,26 +258,30 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     -- individual atoms to their text format but not concerned with
     -- other text formatting.  The resulting SElem tree will be
     -- iterated over to determine the wrapping strategy to apply.
-    selems SNil = SText "()"
-    selems (SAtom a) = SText $ atomPrinter a
+    selems SNil = SText 2 "()"
+    selems (SAtom a) = let p = atomPrinter a in SText (T.length p) p
     selems (SCons x xs) = selems' (selems x) xs
 
-    selems' h SNil = SSingle h
-    selems' h (SAtom a) = SPair h $ SText $ atomPrinter a
-    selems' h (SCons x xs) = SDecl h $ selems x : selems'' xs
+    selems' h SNil = SSingle (sElemSize h) h
+    selems' h (SAtom a) = let p = atomPrinter a
+                              sp = T.length p
+                          in SPair (sp + sElemSize h) h $ SText sp p
+    selems' h (SCons x xs) = let els = selems x : selems'' xs
+                                 elSz = sum $ fmap sElemSize els
+                             in SDecl (elSz + sElemSize h) h $ els
 
     selems'' SNil = []
-    selems'' (SAtom a) = SText (atomPrinter a) : []
+    selems'' (SAtom a) = let p = atomPrinter a in SText (T.length p) p : []
     selems'' (SCons x xs) = selems x : selems'' xs
 
     addIndent (Nothing, t) = t
     addIndent (Just n, t) = indent n t
 
-    pHead pps (SText t) = ( [(Nothing, t)]
+    pHead pps (SText _ t) = ( [(Nothing, t)]
                           , pps { remWidth = remWidth pps - T.length t})
-    pHead pps (SSingle e) = let (ts,pps') = pHead pps e
-                            in ( wrapT (indentWc pps) "" ts
-                               , pps { remWidth = remWidth pps' - 2 })
+    pHead pps (SSingle _ e) = let (ts,pps') = pHead pps e
+                              in ( wrapT (indentWc pps) "" ts
+                                 , pps { remWidth = remWidth pps' - 2 })
     -- For an SPair, prefer to put both elements on the same line.  If
     -- the first element doesn't fit on a line itself, put the second
     -- element underneath.  If the first element fits, then can try to
@@ -277,7 +290,7 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     -- fit, that's good enough.  Note that the multi-line indented
     -- form does not folow the Indent rules: it is a special line
     -- continuation form.
-    pHead pps (SPair e1 e2) =
+    pHead pps (SPair _ e1 e2) =
         let (t1,pps1) = pHead pps e1
             (t2,pps2) = pTail ppsNextLine e2
             (t3,pps3) = pTail ppsSameLine e2  -- same line
@@ -298,9 +311,11 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     --  indentation.  This will produce left-biased wrapping: wrapping
     --  will occur near the root of the SExp tree more than at the
     --  leaves.
-    pHead pps (SDecl first others) =
+    pHead pps (SDecl els first others) =
         let (t1,pps1) = pHead pp2 first
             (to1,ppso) = pTail pps1 (head others)
+            firstPlusFits = sElemSize first + sElemSize (head others) < (remWidth pps - 4)
+            allFits = els < (remWidth pps - length others - 3)
             pfxLen = case swingIndent (SCons SNil (SCons SNil SNil)) of
                        Align -> T.length $ snd $ head t1
                        _ -> indentAmount
@@ -331,14 +346,16 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
                 if length r1 == 1 && remWidth p1 > numClose p1
                 then (wrapT (indentWc pps) (snd l <> " ") r1, p1)
                 else separateLines [l] rn p2
-        in if length t1 > 1
-           then separateLines t1 tothers pp2
-           else if (not tryFirstArgSameLine ||
-                    null others || length to1 > 1 || null to1 ||
-                    T.length (snd t1h) > maxLeftForArgOnSame)
-                then maybeSameLine t1h (others',ppone) (tothers,pp2)
-                else maybeSameLine (fst t1h,
+        in if allFits && length t1 < 2
+           then maybeSameLine t1h (others',ppone) (tothers,pp2)
+           else if (tryFirstArgSameLine && firstPlusFits &&
+                    length t1 < 2 &&
+                    length to1 < 2 &&
+                    not (null to1) && not (null others))
+                then maybeSameLine (fst t1h,
                                     snd t1h <> " " <> snd (head to1)) (others'',ppone') (tothers',pps1')
+                else separateLines t1 tothers pp2
+
 
     pTail = pHead
 
