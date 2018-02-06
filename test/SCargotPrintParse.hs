@@ -10,24 +10,30 @@ import           Data.SCargot.Repr
 import           Data.Semigroup
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
+import           System.Exit
 import           Test.HUnit
 import           Text.Parsec as P
 import           Text.Parsec.Text (Parser)
 import           Text.Printf ( printf )
 
+
 main = do
   putStrLn "Parsing a large S-expression"
-  runTestTT $ TestList [ TestLabel "parse-print flat round-trip" test1
-                       , TestLabel "parse-print pretty round-trip 10" $ test2 10
-                       , TestLabel "parse-print pretty round-trip 15" $ test2 15
-                       , TestLabel "parse-print pretty round-trip 20" $ test2 20
-                       , TestLabel "parse-print pretty round-trip 40" $ test2 40
-                       , TestLabel "parse-print pretty round-trip 60" $ test2 60
-                       , TestLabel "parse-print pretty round-trip 80" $ test2 80
+  counts <- runTestTT $ TestList [ TestLabel "parse-print flat round-trip" test1
+                                 , TestLabel "parse-print pretty round-trip 10" $ test2 10
+                                 , TestLabel "parse-print pretty round-trip 15" $ test2 15
+                                 , TestLabel "parse-print pretty round-trip 20" $ test2 20
+                                 , TestLabel "parse-print pretty round-trip 40" $ test2 40
+                                 , TestLabel "parse-print pretty round-trip 60" $ test2 60
+                                 , TestLabel "parse-print pretty round-trip 80" $ test2 80
                        ]
+  if errors counts + failures counts > 0
+  then exitFailure
+  else exitSuccess
+
 
 test1 = TestCase $ do
-  src <- TIO.readFile "sample.sexp"
+  src <- TIO.readFile "test/sample.sexp"
   let sexpRes = parseSExpr src
   assertBool ("parse errors: " <>
               (either id (const "none") sexpRes)) $ isRight sexpRes
@@ -37,7 +43,7 @@ test1 = TestCase $ do
   assertEqual "round-trip" sexpRes parseOut
 
 test2 width = TestCase $ do
-  src <- TIO.readFile "sample.sexp"
+  src <- TIO.readFile "test/sample.sexp"
   let sexpRes = parseSExpr src
   assertBool ("parse errors: " <>
               (either id (const "none") sexpRes)) $ isRight sexpRes
