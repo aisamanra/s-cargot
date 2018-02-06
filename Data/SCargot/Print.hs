@@ -19,6 +19,7 @@ module Data.SCargot.Print
          , flatPrint
          ) where
 
+import           Control.Applicative
 import           Data.Monoid ((<>))
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -180,10 +181,10 @@ indentSubsequent n (t:ts) = joinLines (t : go ts)
 prettyPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> Text
 prettyPrintSExpr pr@SExprPrinter { .. } expr = case maxWidth of
   Nothing -> flatPrintSExpr (fmap atomPrinter (fromCarrier expr))
-  Just _  -> indentPrintSExpr pr expr
+  Just w  -> indentPrintSExpr2 pr w expr
 
-indentPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> Text
-indentPrintSExpr SExprPrinter { .. } = pHead 0
+indentPrintSExpr :: SExprPrinter a (SExpr a) -> Int -> SExpr a -> Text
+indentPrintSExpr SExprPrinter { .. } _ = pHead 0
   where
     pHead _   SNil         = "()"
     pHead _   (SAtom a)    = atomPrinter a
@@ -218,44 +219,131 @@ indentPrintSExpr SExprPrinter { .. } = pHead 0
               , T.length flat + ind > maxAmt = " " <> indented
               | otherwise = " " <> flat
 
-  -- where
-  --   -- this is the base-case that knows how to print empty lists and
-  --   -- atoms
-  --   pHead _   SNil         = B.fromString "()"
-  --   pHead _   (SAtom a)    = B.fromText a
-  --   pHead ind (SCons x xs) = gather ind x xs id 0
+-- | Pretty-printing for S-Expressions.  The general strategy is that
+-- an SCons tail should either all fit on the current line, or else
+-- each tail item should be placed on its own line with indenting.
+-- Note that a line must print something, so while subsequent elements
+-- will be placed on following lines, it is possible that the first
+-- thing on a line (plus its indentation) may exceed the maxwidth.
 
-  --   -- otherwise, we trawl through the list grabbing every element...
-  --   gather ind h (SCons x xs) k r = gather ind h xs (k . (x:)) (r + T.length x)
-  --   gather ind h end          k r = B.fromString "(" <> hd <> body <> tl <> B.fromString ")"
-  --     where
-  --       tl   = case end of
-  --                SNil      -> mempty
-  --                SAtom a   -> B.fromString " . " <> B.fromText a
-  --                SCons _ _ -> error "[unreachable]"
-  --       hd   = indentSubsequent ind [pHead (ind+1) h]
-  --       lst  = k []
-  --       flat = T.unwords (map (pHead (ind+1)) lst)
-  --       headWidth = T.length hd + 1
-  --       indented =
-  --         case swingIndent h of
-  --           SwingAfter n ->
-  --             let (l, ls) = splitAt n lst
-  --                 t  = T.unwords (map (pHead (ind+1)) l)
-  --                 ts = indentAll (ind + indentAmount)
-  --                                (map (pHead (ind + indentAmount)) ls)
-  --             in t <> ts
-  --           Swing ->
-  --             indentAll (ind + indentAmount)
-  --               (map (pHead (ind + indentAmount)) lst)
-  --           Align ->
-  --             indentSubsequent (ind + headWidth + 1)
-  --               (map (pHead (ind + headWidth + 1)) lst)
-  --       body
-  --         | length lst == 0              = B.fromString ""
-  --         | Just maxAmt <- maxWidth
-  --         , T.length flat + ind > maxAmt = B.fromString " " <> indented
-  --         | otherwise                    = B.fromString " " <> flat
+data PPS = PPS { indentWc :: Int
+               , remWidth :: Int
+               , numClose :: Int
+               }
+         deriving Show
+
+data SElem = SText T.Text | SSingle SElem | SPair SElem SElem | SDecl SElem [SElem]
+             deriving (Show, Eq)
+
+indentPrintSExpr2 :: SExprPrinter a (SExpr a) -> Int -> SExpr a -> Text
+indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
+    let atomTextTree = selems sexpr
+        pretty = fmap addIndent $ fst $ pHead (PPS 0 maxW 0) atomTextTree
+        prettyWithDebug = pretty <> ["", (T.pack $ show atomTextTree)]
+    in T.unlines pretty
+  where
+    -- selems converts the (SExpr a) into an SElem, converting
+    -- individual atoms to their text format but not concerned with
+    -- other text formatting.  The resulting SElem tree will be
+    -- iterated over to determine the wrapping strategy to apply.
+    selems SNil = SText "()"
+    selems (SAtom a) = SText $ atomPrinter a
+    selems (SCons x xs) = selems' (selems x) xs
+
+    selems' h SNil = SSingle h
+    selems' h (SAtom a) = SPair h $ SText $ atomPrinter a
+    selems' h (SCons x xs) = SDecl h $ selems x : selems'' xs
+
+    selems'' SNil = []
+    selems'' (SAtom a) = SText (atomPrinter a) : []
+    selems'' (SCons x xs) = selems x : selems'' xs
+
+    addIndent (Nothing, t) = t
+    addIndent (Just n, t) = indent n t
+
+    pHead pps (SText t) = ( [(Nothing, t)]
+                          , pps { remWidth = remWidth pps - T.length t})
+    pHead pps (SSingle e) = let (ts,pps') = pHead pps e
+                            in ( wrapT (indentWc pps) "" ts
+                               , pps { remWidth = remWidth pps' - 2 })
+    -- For an SPair, prefer to put both elements on the same line.  If
+    -- the first element doesn't fit on a line itself, put the second
+    -- element underneath.  If the first element fits, then can try to
+    -- put the second on as well.  Note that it's possible that the
+    -- second will span multiple lines, but if the head portion will
+    -- fit, that's good enough.  Note that the multi-line indented
+    -- form does not folow the Indent rules: it is a special line
+    -- continuation form.
+    pHead pps (SPair e1 e2) =
+        let (t1,pps1) = pHead pps e1
+            (t2,pps2) = pTail ppsNextLine e2
+            (t3,pps3) = pTail ppsSameLine e2  -- same line
+            ppsNextLine = pps { remWidth = remWidth pps - T.length sep }
+            ppsSameLine = pps1 { remWidth = remWidth pps1 - T.length sep }
+            sep = " . "
+            t1h = head t1
+            wrapJoin i l rs = wrapT i (snd l <> sep) rs
+            sameLine l r p = (wrapJoin (indentWc pps) l r, p)
+            separateLines l r p = (wrapTWith False "(" "" (indentWc pps) "" l ++
+                                   wrapTWith True sep ")" (indentWc pps) "" r, p)
+        in if length t1 > 1 || remWidth pps3 < numClose pps + 5
+           then separateLines t1 t2 pps2
+           else sameLine t1h t3 pps3
+    --  For an SDecl, always put the first element on the line.  If
+    --  *all* other elements fit on the same line, do that, otherwise
+    --  all other elements should appear on subsequent lines with
+    --  indentation.  This will produce left-biased wrapping: wrapping
+    --  will occur near the root of the SExp tree more than at the
+    --  leaves.
+    pHead pps (SDecl first others) =
+        let (t1,pps1) = pHead pp2 first
+            pfxLen = case swingIndent (SCons SNil (SCons SNil SNil)) of
+                       Align -> T.length $ snd $ head t1
+                       _ -> indentAmount
+            pp2 = pps { indentWc = indentWc pps + pfxLen
+                      , remWidth = remWidth pps - 1 - pfxLen
+                      , numClose = numClose pps + 1
+                      }
+            tothers = concatMap (fst . pTail pp2) others -- multiline
+            (others', ppone) = foldl foldPTail ([],pps1) others -- oneline
+            foldPTail (tf,ppf) o = let (ot,opp) = pTail ppf o
+                                       tf1 = head tf
+                                       tr = if length tf == 1 && length ot == 1
+                                            then [(fst tf1, snd tf1 <> " " <> snd (head ot))]
+                                            else tf ++ ot
+                                   in (tr, opp)
+            separateLines l r = ( wrapTWith False "(" "" (indentWc pps) "" l <>
+                                  wrapTWith True "" ")" (indentWc pp2) "" r
+                                , pps)
+            maybeSameLine l (r1,p1) (rn,_) =
+                if length r1 == 1 && remWidth p1 > numClose p1
+                then (wrapT (indentWc pps) (snd l <> " ") r1, p1)
+                else separateLines [l] rn
+        in if length t1 > 1
+           then separateLines t1 tothers
+           else maybeSameLine (head t1) (others',ppone) (tothers,pps1)
+
+    pTail = pHead
+
+
+wrapTWith :: Bool -> T.Text -> T.Text -> Int
+          -> T.Text
+          -> [(Maybe Int, T.Text)]
+          -> [(Maybe Int, T.Text)]
+wrapTWith isContinued st en ind hstart ts =
+    let th = head ts
+        tt = last ts
+        tb = init $ tail ts
+        tp l = (fst l <|> Just ind, snd l)
+        fi = if isContinued then Just ind else Nothing
+    in if length ts > 1
+       then (((fi, st <> hstart <> snd th) : map tp tb) ++
+             [ tp $ (fst tt, snd tt <> en) ])
+       else [(fi, st <> hstart <> snd th <> en)]
+
+wrapT :: Int -> T.Text -> [(Maybe Int, T.Text)] -> [(Maybe Int, T.Text)]
+wrapT = wrapTWith False "(" ")"
+
 
 -- if we don't indent anything, then we can ignore a bunch of the
 -- details above
