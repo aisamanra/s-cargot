@@ -20,12 +20,13 @@ import           Text.Printf ( printf )
 main = do
   putStrLn "Parsing a large S-expression"
   counts <- runTestTT $ TestList [ TestLabel "parse-print flat round-trip" test1
-                                 , TestLabel "parse-print pretty round-trip 10" $ test2 10
-                                 , TestLabel "parse-print pretty round-trip 15" $ test2 15
-                                 , TestLabel "parse-print pretty round-trip 20" $ test2 20
-                                 , TestLabel "parse-print pretty round-trip 40" $ test2 40
-                                 , TestLabel "parse-print pretty round-trip 60" $ test2 60
-                                 , TestLabel "parse-print pretty round-trip 80" $ test2 80
+                                 , TestLabel "parse-print pretty round-trip 10" $ test2 10 Swing
+                                 , TestLabel "parse-print pretty round-trip 15" $ test2 15 Swing
+                                 , TestLabel "parse-print pretty round-trip 20" $ test2 20 Swing
+                                 , TestLabel "parse-print pretty round-trip 40" $ test2 40 Swing
+                                 , TestLabel "parse-print pretty round-trip 60" $ test2 60 Swing
+                                 , TestLabel "parse-print pretty round-trip 60" $ test2 60 Align
+                                 , TestLabel "parse-print pretty round-trip 80" $ test2 80 Swing
                        ]
   if errors counts + failures counts > 0
   then exitFailure
@@ -42,7 +43,7 @@ test1 = TestCase $ do
               (either id (const "none") sexpRes)) $ isRight parseOut
   assertEqual "round-trip" sexpRes parseOut
 
-test2 width = TestCase $ do
+test2 width indentStyle = TestCase $ do
   src <- TIO.readFile "test/sample.sexp"
   let sexpRes = parseSExpr src
   assertBool ("parse errors: " <>
@@ -57,11 +58,11 @@ test2 width = TestCase $ do
   putStrLn $ "Flat Printed: " <> (show $ sexpRes >>= return . printSExpr)
   putStrLn ""
   putStrLn $ "Pretty Printed @ " <> show width <> ": "
-  mapM_ TIO.putStrLn  (T.lines $ pprintSExpr width $ fromRight SNil sexpRes)
+  mapM_ TIO.putStrLn  (T.lines $ pprintSExpr width indentStyle $ fromRight SNil sexpRes)
   putStrLn ""
   -}
 
-  let parseOut = sexpRes >>= return . pprintSExpr width >>= parseSExpr
+  let parseOut = sexpRes >>= return . pprintSExpr width indentStyle >>= parseSExpr
   assertBool ("parse out errors: " <>
               (either id (const "none") sexpRes)) $ isRight parseOut
   assertEqual "round-trip" sexpRes parseOut
@@ -104,8 +105,11 @@ printAtom a =
 printSExpr :: SExpr FAtom -> T.Text
 printSExpr = encodeOne (flatPrint printAtom)
 
-pprintSExpr :: Int -> SExpr FAtom -> T.Text
-pprintSExpr w = encodeOne (setMaxWidth w $ setIndentAmount 1 $ basicPrint printAtom)
+pprintSExpr :: Int -> Indent -> SExpr FAtom -> T.Text
+pprintSExpr w i = encodeOne (setIndentStrategy (const i) $
+                             setMaxWidth w $
+                             setIndentAmount 1 $
+                             basicPrint printAtom)
 
 formatBV :: Int -> Integer -> T.Text
 formatBV w val = T.pack (prefix ++ printf fmt val)

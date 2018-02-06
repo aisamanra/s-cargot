@@ -244,9 +244,6 @@ sElemSize (SSingle n _) = n
 sElemSize (SPair n _ _) = n
 sElemSize (SDecl n _ _) = n
 
-tryFirstArgSameLine = True
-maxLeftForArgOnSame = 4
-
 indentPrintSExpr2 :: SExprPrinter a (SExpr a) -> Int -> SExpr a -> Text
 indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     let atomTextTree = selems sexpr
@@ -316,9 +313,10 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
             (to1,ppso) = pTail pps1 (head others)
             firstPlusFits = sElemSize first + sElemSize (head others) < (remWidth pps - 4)
             allFits = els < (remWidth pps - length others - 3)
-            pfxLen = case swingIndent (SCons SNil (SCons SNil SNil)) of
-                       Align -> T.length $ snd $ head t1
-                       _ -> indentAmount
+            pfxLen = indentAmount
+            tryFirstArgSameLine = case swingIndent (SCons SNil (SCons SNil SNil)) of
+                                    Align -> True
+                                    _ -> False
             pp2 = pps { indentWc = indentWc pps + pfxLen
                       , remWidth = remWidth pps - 1 - pfxLen
                       , numClose = numClose pps + 1
