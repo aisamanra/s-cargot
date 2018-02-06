@@ -235,6 +235,9 @@ data PPS = PPS { indentWc :: Int
 data SElem = SText T.Text | SSingle SElem | SPair SElem SElem | SDecl SElem [SElem]
              deriving (Show, Eq)
 
+tryFirstArgSameLine = True
+maxLeftForArgOnSame = 4
+
 indentPrintSExpr2 :: SExprPrinter a (SExpr a) -> Int -> SExpr a -> Text
 indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     let atomTextTree = selems sexpr
@@ -297,6 +300,7 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     --  leaves.
     pHead pps (SDecl first others) =
         let (t1,pps1) = pHead pp2 first
+            (to1,ppso) = pTail pps1 (head others)
             pfxLen = case swingIndent (SCons SNil (SCons SNil SNil)) of
                        Align -> T.length $ snd $ head t1
                        _ -> indentAmount
@@ -304,24 +308,37 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
                       , remWidth = remWidth pps - 1 - pfxLen
                       , numClose = numClose pps + 1
                       }
+            t1h = head t1
+            pps1' = pps1 { indentWc = indentWc pps1 + T.length (snd t1h) + 1
+                         , remWidth = remWidth pps1 - T.length (snd t1h) - 1
+                         }
             tothers = concatMap (fst . pTail pp2) others -- multiline
+            tothers' = concatMap (fst . pTail pps1') $ tail others -- multiline from 2nd
             (others', ppone) = foldl foldPTail ([],pps1) others -- oneline
+            (others'', ppone') = foldl foldPTail ([],pps1') $ tail others -- multiline from 2nd
             foldPTail (tf,ppf) o = let (ot,opp) = pTail ppf o
                                        tf1 = head tf
                                        tr = if length tf == 1 && length ot == 1
                                             then [(fst tf1, snd tf1 <> " " <> snd (head ot))]
                                             else tf ++ ot
                                    in (tr, opp)
-            separateLines l r = ( wrapTWith False "(" "" (indentWc pps) "" l <>
-                                  wrapTWith True "" ")" (indentWc pp2) "" r
-                                , pps)
-            maybeSameLine l (r1,p1) (rn,_) =
+            separateLines l r p =
+                let wr = if null r then []
+                         else wrapTWith True "" ")" (indentWc p) "" r
+                    cl = if null r then ")" else ""
+                in (wrapTWith False "(" cl (indentWc pps) "" l <> wr, pps)
+            maybeSameLine l (r1,p1) (rn,p2) =
                 if length r1 == 1 && remWidth p1 > numClose p1
                 then (wrapT (indentWc pps) (snd l <> " ") r1, p1)
-                else separateLines [l] rn
+                else separateLines [l] rn p2
         in if length t1 > 1
-           then separateLines t1 tothers
-           else maybeSameLine (head t1) (others',ppone) (tothers,pps1)
+           then separateLines t1 tothers pp2
+           else if (not tryFirstArgSameLine ||
+                    null others || length to1 > 1 || null to1 ||
+                    T.length (snd t1h) > maxLeftForArgOnSame)
+                then maybeSameLine t1h (others',ppone) (tothers,pp2)
+                else maybeSameLine (fst t1h,
+                                    snd t1h <> " " <> snd (head to1)) (others'',ppone') (tothers',pps1')
 
     pTail = pHead
 
