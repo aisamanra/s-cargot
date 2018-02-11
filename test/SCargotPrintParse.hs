@@ -40,8 +40,9 @@ test1 = TestCase $ do
               (either id (const "none") sexpRes)) $ isRight sexpRes
   let parseOut = sexpRes >>= return . printSExpr >>= parseSExpr
   assertBool ("parse out errors: " <>
-              (either id (const "none") sexpRes)) $ isRight parseOut
+              (either id (const "none") parseOut)) $ isRight parseOut
   assertEqual "round-trip" sexpRes parseOut
+
 
 test2 width indentStyle = TestCase $ do
   src <- TIO.readFile "test/sample.sexp"
@@ -64,7 +65,7 @@ test2 width indentStyle = TestCase $ do
 
   let parseOut = sexpRes >>= return . pprintSExpr width indentStyle >>= parseSExpr
   assertBool ("parse out errors: " <>
-              (either id (const "none") sexpRes)) $ isRight parseOut
+              (either id (const "none") parseOut)) $ isRight parseOut
   assertEqual "round-trip" sexpRes parseOut
 
 
