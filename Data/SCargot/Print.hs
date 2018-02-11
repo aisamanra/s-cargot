@@ -233,16 +233,16 @@ data PPS = PPS { indentWc :: Int
          deriving Show
 
 data SElem = SText Int T.Text
-           | SSingle Int SElem
            | SPair Int SElem SElem
            | SDecl Int SElem [SElem]
+           | SJoin Int [SElem]
              deriving (Show, Eq)
 
 sElemSize :: SElem -> Int
 sElemSize (SText n _) = n
-sElemSize (SSingle n _) = n
 sElemSize (SPair n _ _) = n
 sElemSize (SDecl n _ _) = n
+sElemSize (SJoin n _) = n
 
 indentPrintSExpr2 :: SExprPrinter a (SExpr a) -> Int -> SExpr a -> Text
 indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
@@ -257,36 +257,32 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     -- iterated over to determine the wrapping strategy to apply.
     selems SNil = SText 2 "()"
     selems (SAtom a) = let p = atomPrinter a in SText (T.length p) p
-    selems (SCons x xs) = selems' (selems x) xs
+    selems (SCons l r) =
+        let l' = selems l
+            lsz = sElemSize l'
+            r' = selems r
+            rsz = sElemSize r'
+            bsz = lsz + rsz
+        in case r of
+             SNil -> SJoin lsz [l']
+             SAtom _ -> SPair bsz l' r'
+             _ -> case l of
+                    SAtom _ -> case r' of
+                                 SJoin _ rl' -> SDecl bsz l' rl'
+                                 SDecl _ d dl -> SDecl bsz l' (d:dl)
+                                 _ -> SDecl bsz l' [r']
+                    _ -> SJoin bsz $ prefixOnto l' r'
 
-    selems' h SNil = SSingle (sElemSize h) h
-    selems' h (SAtom a) = let p = atomPrinter a
-                              sp = T.length p
-                          in SPair (sp + sElemSize h) h $ SText sp p
-    selems' h (SCons x xs) = let els = selems x : selems'' xs
-                                 elSz = sum $ fmap sElemSize els
-                             in SDecl (elSz + sElemSize h) h $ els
-
-    selems'' SNil = []
-    selems'' (SAtom a) = let p = atomPrinter a in SText (T.length p) p : []
-    selems'' (SCons x xs) = selems x : selems'' xs
+    prefixOnto e (SJoin _ l) = e:l
+    prefixOnto e (SDecl _ l r) = e:l:r
+    prefixOnto e r = [e,r]
 
     addIndent (Nothing, t) = t
     addIndent (Just n, t) = indent n t
 
+    pHead :: PPS -> SElem -> ( [(Maybe Int, Text)], PPS )
     pHead pps (SText _ t) = ( [(Nothing, t)]
-                          , pps { remWidth = remWidth pps - T.length t})
-    pHead pps (SSingle _ e) = let (ts,pps') = pHead pps e
-                              in ( wrapT (indentWc pps) "" ts
-                                 , pps { remWidth = remWidth pps' - 2 })
-    -- For an SPair, prefer to put both elements on the same line.  If
-    -- the first element doesn't fit on a line itself, put the second
-    -- element underneath.  If the first element fits, then can try to
-    -- put the second on as well.  Note that it's possible that the
-    -- second will span multiple lines, but if the head portion will
-    -- fit, that's good enough.  Note that the multi-line indented
-    -- form does not folow the Indent rules: it is a special line
-    -- continuation form.
+                            , pps { remWidth = remWidth pps - T.length t})
     pHead pps (SPair _ e1 e2) =
         let (t1,pps1) = pHead pps e1
             (t2,pps2) = pTail ppsNextLine e2
@@ -302,6 +298,20 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
         in if length t1 > 1 || remWidth pps3 < numClose pps + 5
            then separateLines t1 t2 pps2
            else sameLine t1h t3 pps3
+    pHead pps (SJoin _ []) = ( [], pps )
+    pHead pps (SJoin els others) =
+        let (t1,pps1) = pHead pps $ head others
+            (t3,pps3) = foldl pTail' ([], pps) others
+            pTail' (rl,pp) ne = let (rt,pr) = pTail pp ne
+                                in (rl <> rt,pr)
+            -- (t3,pps3) = concatMap (fst . pTail pps) others
+            sameLine parts pEnd = (wrapT (indentWc pps) "" parts, pEnd)
+            separateLines elems pEnd =
+                let lr = concatMap (fst . pTail pEnd) elems
+                in (wrapTWith False "(" ")" (indentWc pps) "" lr, pEnd)
+        in if length t1 > 1 || remWidth pps3 < numClose pps + 5 -- KWQ: use els to check for sameline
+           then separateLines others pps
+           else sameLine t3 pps3
     --  For an SDecl, always put the first element on the line.  If
     --  *all* other elements fit on the same line, do that, otherwise
     --  all other elements should appear on subsequent lines with
