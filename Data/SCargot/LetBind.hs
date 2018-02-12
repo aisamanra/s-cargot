@@ -129,8 +129,7 @@ data Location a = Location { locExpr :: SExpr a
                            , locId :: LocationId
                            }
                 deriving Show
-data NamedLoc a = NamedLoc { nlocExpr :: SExpr a
-                           , nlocId :: LocationId
+data NamedLoc a = NamedLoc { nlocId :: LocationId
                            , nlocVar :: SExpr a
                            }
 
@@ -174,8 +173,7 @@ assignLBNames :: (Eq a, IsString str, Monoid str) =>
 assignLBNames guide inp = snd . T.mapAccumL mkNamedLoc 0
     where mkNamedLoc i l = let nm = labelMaker guide $ "var" <> fromString (show i)
                            in case F.find ((==) nm) inp of
-                                Nothing -> (i+1, NamedLoc { nlocExpr = locExpr l
-                                                          , nlocId = locId l
+                                Nothing -> (i+1, NamedLoc { nlocId = locId l
                                                           , nlocVar = SAtom nm
                                                           })
                                 Just _ -> mkNamedLoc (i+1) l  -- collision, try another varname
