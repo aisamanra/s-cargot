@@ -157,8 +157,8 @@ updateMap guide point mymap =
     where addOrUpdate [] = ([ Location { locExpr=point, locCount=succCnt(0), locId=lId} ], lId)
           addOrUpdate (p:ps) = let (sm,si) = addOrUpdate ps
                                in if locExpr p /= point
-                               then (p : sm, si)
-                               else (p { locCount = succCnt(locCount p) } : ps, si)
+                                  then (p : sm, si)
+                                  else (p { locCount = succCnt(locCount p) } : ps, locId p)
           lId = length (points mymap)
           succCnt n = if F.length point > (minExprSize guide) then n + 1 else n  -- ignore short SExprs
 
