@@ -42,7 +42,7 @@ data DiscoveryGuide a str = Guide
     , weighting :: SExpr a -> Int -> Int
       -- ^ Given an SExpr sub-expression and the count of occurrences
       -- of that sub-expression, return a weighting value that is used
-      -- for sorting the discovered let bindings to chose the most
+      -- for sorting the discovered let bindings to choose the most
       -- weighty 'maxLetBinds' for substitution.
 
     , letMaker :: (IsString str) => str -> a
