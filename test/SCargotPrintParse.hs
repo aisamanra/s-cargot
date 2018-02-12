@@ -6,6 +6,7 @@ module Main where
 import           Data.Either
 import           Data.SCargot
 import           Data.SCargot.Comments
+import           Data.SCargot.LetBind
 import           Data.SCargot.Repr
 import           Data.Semigroup
 import qualified Data.Text as T
@@ -107,6 +108,15 @@ testParsePrint (n,s) = TestList
                        , testParsePPrint 80 Align n s
                        , testParsePPrint 40 Align n s
                        , testParsePPrint 10 Align n s
+
+                       , testParseFlatPrintLetBound False n s
+                       , testParseFlatPrintLetBound True n s
+                       , testParsePPrintLetBound 80 Align False n s
+                       , testParsePPrintLetBound 80 Align True n s
+                       , testParsePPrintLetBound 40 Swing False n s
+                       , testParsePPrintLetBound 40 Swing True n s
+                       , testParsePPrintLetBound 60 Align False n s
+                       , testParsePPrintLetBound 60 Align True n s
                        ]
 
 
@@ -117,6 +127,13 @@ testParseFlatPrint testName src =
                       stripAllText
                       src
 
+testParseFlatPrintLetBound recursiveBound testName src =
+    let guide = (nativeGuide AIdent AIdent) { allowRecursion = recursiveBound }
+    in testRoundTrip (testName <> " flat print")
+           (discoverLetBindings guide . fromRight (error "Failed parse") . parseSExpr)
+           (printSExpr . letExpand getIdent)
+           stripAllText
+           src
 
 testParsePPrint width indentStyle testName src =
     testRoundTrip (testName <> " pretty print")
@@ -124,6 +141,14 @@ testParsePPrint width indentStyle testName src =
                       (pprintSExpr width indentStyle)
                       stripAllText
                       src
+
+testParsePPrintLetBound width indentStyle recursiveBound testName src =
+    let guide = (nativeGuide AIdent AIdent) { allowRecursion = recursiveBound }
+    in testRoundTrip (testName <> " pretty print")
+           (discoverLetBindings guide . fromRight (error "Failed parse") . parseSExpr)
+           (pprintSExpr width indentStyle . letExpand getIdent)
+           stripAllText
+           src
 
 stripAllText = T.unwords . concatMap T.words . T.lines
 

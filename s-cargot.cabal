@@ -44,6 +44,7 @@ library
                        Data.SCargot.Common,
                        Data.SCargot.Language.Basic,
                        Data.SCargot.Language.HaskLike
+                       Data.SCargot.LetBind
   build-depends:       base        >=4.7 && <5,
                        parsec      >=3.1 && <4,
                        text        >=1.2 && <2,
