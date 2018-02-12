@@ -411,6 +411,8 @@ flatPrintSExpr = TL.toStrict . B.toLazyText . pHead
     pHead SNil         =
       B.fromString "()"
 
+    pTail e@(SCons _ (SAtom _)) =
+        B.fromString " " <> pHead e <> B.fromString ")"
     pTail (SCons x xs) =
       B.fromString " " <> pHead x <> pTail xs
     pTail (SAtom t) =
