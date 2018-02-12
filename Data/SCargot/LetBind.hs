@@ -46,15 +46,19 @@ data DiscoveryGuide a str = Guide
       -- weighty 'maxLetBinds' for substitution.
 
     , letMaker :: (IsString str) => str -> a
-      -- ^ Called to generate the "let" statement token itself
+      -- ^ Called to generate the "let" statement token itself.
 
-    , labelMaker :: (IsString str, Monoid str) => str -> a
-      -- ^ Called to generate the binding variable name token given the
-      -- name.
+    , labelMaker :: (IsString str, Monoid str) => str -> SExpr a -> a
+      -- ^ Called to generate the binding variable name token given
+      -- the name. Passed the suggested name that will be used for
+      -- this binding and also the sub-expression that will be
+      -- referenced.  The return will be placed in an SAtom and used
+      -- as the variable to reference the bound sub-expression.
+
     }
 
 
-nativeGuide :: (str -> a) -> (str -> a) -> DiscoveryGuide a str
+nativeGuide :: (str -> a) -> (str -> SExpr a -> a) -> DiscoveryGuide a str
 nativeGuide letMk labelMk = Guide { maxLetBinds = const 10
                                   , minExprSize = 6
                                   , allowRecursion = False
@@ -170,7 +174,8 @@ findLocation loc = fndLoc
 assignLBNames :: (Eq a, IsString str, Monoid str) =>
                  DiscoveryGuide a str -> SExpr a -> [Location a] -> [NamedLoc a]
 assignLBNames guide inp = snd . mapAccumL mkNamedLoc (1::Int)
-    where mkNamedLoc i l = let nm = labelMaker guide $ "var" <> fromString (show i)
+    where mkNamedLoc i l = let nm = labelMaker guide suggestedName $ locExpr l
+                               suggestedName = "var" <> fromString (show i)
                            in case F.find ((==) nm) inp of
                                 Nothing -> (i+1, NamedLoc { nlocId = locId l
                                                           , nlocVar = SAtom nm

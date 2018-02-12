@@ -129,7 +129,7 @@ testParseFlatPrint testName src =
                       src
 
 testParseFlatPrintLetBound recursiveBound testName src =
-    let guide = (nativeGuide AIdent AIdent) { allowRecursion = recursiveBound }
+    let guide = (nativeGuide AIdent (\n _ -> AIdent n)) { allowRecursion = recursiveBound }
     in testRoundTrip (testName <> " flat print")
            (discoverLetBindings guide . fromRight (error "Failed parse") . parseSExpr)
            (printSExpr . letExpand getIdent)
@@ -144,7 +144,7 @@ testParsePPrint width indentStyle testName src =
                       src
 
 testParsePPrintLetBound width indentStyle recursiveBound testName src =
-    let guide = (nativeGuide AIdent AIdent) { allowRecursion = recursiveBound }
+    let guide = (nativeGuide AIdent (\n _ -> AIdent n)) { allowRecursion = recursiveBound }
     in testRoundTrip (testName <> " pretty print")
            (discoverLetBindings guide . fromRight (error "Failed parse") . parseSExpr)
            (pprintSExpr width indentStyle . letExpand getIdent)
