@@ -22,7 +22,7 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.SCargot.Repr
 import           Data.String
-import qualified Data.Traversable as T
+import           Data.Traversable ( mapAccumL )
 
 
 data DiscoveryGuide a str = Guide
@@ -109,15 +109,13 @@ bestBindings guide exprs locs = getMaxBest
                               reverse $
                               sortBy (compare `on` (uncurry (weighting guide) . lwi)) $
                               filter ((/=) 0 . locCount) locs
-          bestB (_, (0, b)) _ = ((0,0), (0, b))
+          bestB (_, (0, b)) _ = ((0::Int, 0::Int), (0, b))
           bestB ((s,h), (n, b)) e = if not (allowRecursion guide) && isSubBinding e b
                                     then ((s, h), (n, b))
                                     else if s > 0
                                          then ((s-1, h), (n, b))
                                          else ((s, h), (n-1, e:b))
-          isSubBinding :: Location a -> [Location a] -> Bool
           isSubBinding x = or . fmap (isSub x)
-          isSub :: Location a -> Location a -> Bool
           isSub x startingFrom = isJust (findLocation (locId startingFrom) exprs >>=
                                          findLocation (locId x))
           lwi l = (locExpr l, locCount l)
@@ -135,13 +133,14 @@ data NamedLoc a = NamedLoc { nlocId :: LocationId
 
 data MyMap a = MyMap { points :: [Location a]
                      }
+startingLoc :: MyMap a
 startingLoc = MyMap []
 
 data ExprInfo a = EINil | EIAtom a | EICons LocationId (ExprInfo a) (ExprInfo a)
 
 explore :: Eq a => DiscoveryGuide a str -> MyMap a -> SExpr a -> (MyMap a, ExprInfo a)
-explore guide mymap SNil = (mymap, EINil)
-explore guide mymap (SAtom a) = (mymap, EIAtom a)
+explore _ mymap SNil = (mymap, EINil)
+explore _ mymap (SAtom a) = (mymap, EIAtom a)
 explore guide mymap h@(SCons l r) =
     let (lc,le) = explore guide mymap l
         (rc,re) = explore guide lc r
@@ -170,7 +169,7 @@ findLocation loc = fndLoc
 
 assignLBNames :: (Eq a, IsString str, Monoid str) =>
                  DiscoveryGuide a str -> SExpr a -> [Location a] -> [NamedLoc a]
-assignLBNames guide inp = snd . T.mapAccumL mkNamedLoc 0
+assignLBNames guide inp = snd . mapAccumL mkNamedLoc (1::Int)
     where mkNamedLoc i l = let nm = labelMaker guide $ "var" <> fromString (show i)
                            in case F.find ((==) nm) inp of
                                 Nothing -> (i+1, NamedLoc { nlocId = locId l
@@ -178,8 +177,10 @@ assignLBNames guide inp = snd . T.mapAccumL mkNamedLoc 0
                                                           })
                                 Just _ -> mkNamedLoc (i+1) l  -- collision, try another varname
 
-substLBRefs :: DiscoveryGuide a str -> [NamedLoc a] -> ExprInfo a -> (SExpr a, SExpr a)
-substLBRefs guide nlocs = subsRefs SNil
+substLBRefs :: DiscoveryGuide a str -> [NamedLoc a] -> ExprInfo a
+            -> (SExpr a, SExpr a)
+               -- ^ (varbindings, exprwithvars)
+substLBRefs _ nlocs = subsRefs SNil
     where subsRefs b EINil = (b, SNil)
           subsRefs b (EIAtom a) = (b, SAtom a)
           subsRefs b (EICons i l r) = let (b',l') = subsRefs b l
@@ -196,7 +197,7 @@ substLBRefs guide nlocs = subsRefs SNil
 
 letExpand :: (Eq a, Show a, Eq str, IsString str) => (a -> Maybe str) -> SExpr a -> SExpr a
 letExpand atomToText = findExpLet
-    where findExpLet e@(SCons (SAtom a) (SCons lbvdefs (SCons subsInp SNil))) =
+    where findExpLet (SCons (SAtom a) (SCons lbvdefs (SCons subsInp SNil))) =
               if atomToText a == Just "let"
               then expLet lbvdefs subsInp
               else SCons (SAtom a) (SCons (findExpLet lbvdefs) (SCons (findExpLet subsInp) SNil))
@@ -205,7 +206,7 @@ letExpand atomToText = findExpLet
           bindings = parseVar []
           parseVar vdefs (SCons (SCons vn (SCons vv SNil)) r) = (vn, vv) : parseVar vdefs r
           parseVar vdefs SNil = vdefs
-          parseVar vdefs e = error $ "Expected a var, got: " <> show e
+          parseVar _ e = error $ "Expected a var, got: " <> show e
           expandWith _ SNil = SNil
           expandWith vdefs e@(SCons v@(SAtom _) SNil) =
               case lookup v vdefs of
@@ -215,4 +216,4 @@ letExpand atomToText = findExpLet
               case lookup e vdefs of
                 Nothing -> SCons (expandWith vdefs l) (expandWith vdefs r)
                 Just vv -> expandWith vdefs vv
-          expandWith vdefs e@(SAtom _) = e
+          expandWith _ e@(SAtom _) = e
