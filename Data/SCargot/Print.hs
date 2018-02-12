@@ -248,7 +248,7 @@ indentPrintSExpr2 :: SExprPrinter a (SExpr a) -> Int -> SExpr a -> Text
 indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     let atomTextTree = selems sexpr
         pretty = fmap addIndent $ fst $ pHead (PPS 0 maxW 0) atomTextTree
-        prettyWithDebug = pretty <> ["", (T.pack $ show atomTextTree)]
+        -- prettyWithDebug = pretty <> ["", (T.pack $ show atomTextTree)]
     in T.unlines pretty
   where
     -- selems converts the (SExpr a) into an SElem, converting
@@ -298,18 +298,27 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
         in if length t1 > 1 || remWidth pps3 < numClose pps + 5
            then separateLines t1 t2 pps2
            else sameLine t1h t3 pps3
+    -- An SJoin is a sequence of elements at the same rank.  They are
+    -- either all placed on a single line, or one on each line.
     pHead pps (SJoin _ []) = ( [], pps )
     pHead pps (SJoin els others) =
-        let (t1,pps1) = pHead pps $ head others
+        let (t1,_) = pHead pps $ head others
             (t3,pps3) = foldl pTail' ([], pps) others
+            pTail' :: ([(Maybe Int, Text)], PPS) -> SElem -> ([(Maybe Int, Text)], PPS)
             pTail' (rl,pp) ne = let (rt,pr) = pTail pp ne
-                                in (rl <> rt,pr)
-            -- (t3,pps3) = concatMap (fst . pTail pps) others
+                                    hrl = head rl
+                                    hrt = head rt
+                                in if length rt == 1
+                                   then case length rl of
+                                          0 -> (rt, pr)
+                                          1 -> ((fst hrl, snd hrl <> " " <> snd hrt):[], pr)
+                                          _ -> (rl <> rt, pr)
+                                   else (rl <> rt, pr)
             sameLine parts pEnd = (wrapT (indentWc pps) "" parts, pEnd)
             separateLines elems pEnd =
                 let lr = concatMap (fst . pTail pEnd) elems
                 in (wrapTWith False "(" ")" (indentWc pps) "" lr, pEnd)
-        in if length t1 > 1 || remWidth pps3 < numClose pps + 5 -- KWQ: use els to check for sameline
+        in if els > remWidth pps3 || length t1 > 1 || remWidth pps3 < numClose pps + 5
            then separateLines others pps
            else sameLine t3 pps3
     --  For an SDecl, always put the first element on the line.  If
@@ -320,7 +329,7 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     --  leaves.
     pHead pps (SDecl els first others) =
         let (t1,pps1) = pHead pp2 first
-            (to1,ppso) = pTail pps1 (head others)
+            (to1,_) = pTail pps1 (head others)
             firstPlusFits = sElemSize first + sElemSize (head others) < (remWidth pps - 4)
             allFits = els < (remWidth pps - length others - 3)
             pfxLen = indentAmount
@@ -341,8 +350,11 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
             (others'', ppone') = foldl foldPTail ([],pps1') $ tail others -- multiline from 2nd
             foldPTail (tf,ppf) o = let (ot,opp) = pTail ppf o
                                        tf1 = head tf
-                                       tr = if length tf == 1 && length ot == 1
-                                            then [(fst tf1, snd tf1 <> " " <> snd (head ot))]
+                                       tr = if length ot == 1
+                                            then case length tf of
+                                                   0 -> ot
+                                                   1 -> [(fst tf1, snd tf1 <> " " <> snd (head ot))]
+                                                   _ -> tf ++ ot
                                             else tf ++ ot
                                    in (tr, opp)
             separateLines l r p =
@@ -351,7 +363,7 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
                     cl = if null r then ")" else ""
                 in (wrapTWith False "(" cl (indentWc pps) "" l <> wr, pps)
             maybeSameLine l (r1,p1) (rn,p2) =
-                if length r1 == 1 && remWidth p1 > numClose p1
+                if length r1 <= 1 && remWidth p1 > numClose p1
                 then (wrapT (indentWc pps) (snd l <> " ") r1, p1)
                 else separateLines [l] rn p2
         in if allFits && length t1 < 2
