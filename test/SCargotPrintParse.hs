@@ -19,33 +19,124 @@ import           Text.Printf ( printf )
 
 main = do
   putStrLn "Parsing a large S-expression"
-  counts <- runTestTT $ TestList [ TestLabel "parse-print flat round-trip" test1
-                                 , TestLabel "parse-print pretty round-trip 10" $ test2 10 Swing
-                                 , TestLabel "parse-print pretty round-trip 15" $ test2 15 Swing
-                                 , TestLabel "parse-print pretty round-trip 20" $ test2 20 Swing
-                                 , TestLabel "parse-print pretty round-trip 40" $ test2 40 Swing
-                                 , TestLabel "parse-print pretty round-trip 60" $ test2 60 Swing
-                                 , TestLabel "parse-print pretty round-trip 60" $ test2 60 Align
-                                 , TestLabel "parse-print pretty round-trip 80" $ test2 80 Swing
-                       ]
+  srcs <- mapM (\n -> (,) n <$> TIO.readFile n) [ "test/small-sample.sexp"
+                                                , "test/med-sample.sexp"
+                                                , "test/big-sample.sexp"
+                                                ]
+  counts <- runTestTT $ TestList
+            [ TestLabel "basic checks" $ TestList
+              [ TestLabel "flat print" $ TestList
+                [ TestLabel "flatprint SNil" $ "()" ~=? printSExpr SNil
+                , TestLabel "flatprint SAtom" $ "hi" ~=? printSExpr (SAtom (AIdent "hi"))
+                , TestLabel "flatprint pair" $ "(hi . world)" ~=?
+                  printSExpr (SCons (SAtom (AIdent "hi")) (SAtom (AIdent "world")))
+                , TestLabel "flatprint list of 1" $ "(hi)" ~=?
+                  printSExpr (SCons (SAtom (AIdent "hi")) SNil)
+                , TestLabel "flatprint list of 2" $ "(hi world)" ~=?
+                  printSExpr (SCons (SAtom (AIdent "hi"))
+                                    (SCons (SAtom (AIdent "world"))
+                                           SNil))
+                , TestLabel "flatprint list of 2 pairs" $ "((hi . hallo) (world . welt))" ~=?
+                  printSExpr (SCons (SCons (SAtom (AIdent "hi"))
+                                           (SAtom (AIdent "hallo")))
+                                    (SCons (SAtom (AIdent "world"))
+                                           (SAtom (AIdent "welt"))))
+                , TestLabel "flatprint list of 3 ending in a pair" $ "(hi world (hallo . welt))" ~=?
+                  printSExpr (SCons (SAtom (AIdent "hi"))
+                                    (SCons (SAtom (AIdent "world"))
+                                           (SCons (SAtom (AIdent "hallo"))
+                                                  (SAtom (AIdent "welt")))))
+                , TestLabel "flatprint list of 3" $ "(hi world hallo)" ~=?
+                  printSExpr (SCons (SAtom (AIdent "hi"))
+                                    (SCons (SAtom (AIdent "world"))
+                                           (SCons (SAtom (AIdent "hallo"))
+                                                  SNil)))
+                ]
+              , TestLabel "pretty print" $
+                let pprintIt = pprintSExpr 40 Swing in TestList
+                [ TestLabel "pretty print SNil" $ "()\n" ~=? pprintIt SNil
+                , TestLabel "pretty print SAtom" $ "hi\n" ~=? pprintIt (SAtom (AIdent "hi"))
+                , TestLabel "pretty print pair" $ "(hi . world)\n" ~=?
+                  pprintIt (SCons (SAtom (AIdent "hi")) (SAtom (AIdent "world")))
+                , TestLabel "pretty print list of 1" $ "(hi)\n" ~=?
+                  pprintIt (SCons (SAtom (AIdent "hi")) SNil)
+                , TestLabel "pretty print list of 2" $ "(hi world)\n" ~=?
+                  pprintIt (SCons (SAtom (AIdent "hi"))
+                                  (SCons (SAtom (AIdent "world"))
+                                         SNil))
+                , TestLabel "pretty print list of 2 pairs" $
+                  "((hi . hallo) (world . welt))\n" ~=?
+                  pprintIt (SCons (SCons (SAtom (AIdent "hi"))
+                                         (SAtom (AIdent "hallo")))
+                                  (SCons (SAtom (AIdent "world"))
+                                         (SAtom (AIdent "welt"))))
+                , TestLabel "pretty print list of 3 ending in a pair" $
+                  "(hi world (hallo . welt))\n" ~=?
+                  pprintIt (SCons (SAtom (AIdent "hi"))
+                                  (SCons (SAtom (AIdent "world"))
+                                         (SCons (SAtom (AIdent "hallo"))
+                                                (SAtom (AIdent "welt")))))
+                , TestLabel "pretty print list of 3" $ "(hi world hallo)\n" ~=?
+                  pprintIt (SCons (SAtom (AIdent "hi"))
+                                  (SCons (SAtom (AIdent "world"))
+                                         (SCons (SAtom (AIdent "hallo"))
+                                                SNil)))
+                ]
+              ]
+            , TestLabel "round-trip" $ TestList $
+              concatMap (\t -> map t srcs) $
+              [ testParsePrint
+              ]
+            ]
   if errors counts + failures counts > 0
   then exitFailure
   else exitSuccess
 
 
-test1 = TestCase $ do
-  src <- TIO.readFile "test/sample.sexp"
-  let sexpRes = parseSExpr src
-  assertBool ("parse errors: " <>
-              (either id (const "none") sexpRes)) $ isRight sexpRes
-  let parseOut = sexpRes >>= return . printSExpr >>= parseSExpr
-  assertBool ("parse out errors: " <>
-              (either id (const "none") parseOut)) $ isRight parseOut
-  assertEqual "round-trip" sexpRes parseOut
+testParsePrint :: (String, T.Text) -> Test
+testParsePrint (n,s) = TestList
+                       [ testParseFlatPrint n s
+
+                       , testParsePPrint 80 Swing n s
+                       , testParsePPrint 60 Swing n s
+                       , testParsePPrint 40 Swing n s
+                       , testParsePPrint 20 Swing n s
+                       , testParsePPrint 15 Swing n s
+                       , testParsePPrint 10 Swing n s
+
+                       , testParsePPrint 80 Align n s
+                       , testParsePPrint 40 Align n s
+                       , testParsePPrint 10 Align n s
+                       ]
 
 
-test2 width indentStyle = TestCase $ do
-  src <- TIO.readFile "test/sample.sexp"
+testParseFlatPrint testName src =
+    testRoundTrip (testName <> " flat print")
+                      (fromRight (error "Failed parse") . parseSExpr)
+                      printSExpr
+                      stripAllText
+                      src
+
+
+testParsePPrint width indentStyle testName src =
+    testRoundTrip (testName <> " pretty print")
+                      (fromRight (error "Failed parse") . parseSExpr)
+                      (pprintSExpr width indentStyle)
+                      stripAllText
+                      src
+
+stripAllText = T.unwords . concatMap T.words . T.lines
+
+testRoundTrip nm there back prep src = TestList
+  [ TestLabel (nm <> " round trip") $
+    TestCase $ (prep src) @=? (prep $ back $ there src)
+
+  , TestLabel (nm <> " round trip twice") $
+    TestCase $ (prep src) @=? (prep $ back $ there $ back $ there src)
+  ]
+
+
+test3 width indentStyle recursiveBound (name,src) = TestLabel name $ TestCase $ do
   let sexpRes = parseSExpr src
   assertBool ("parse errors: " <>
               (either id (const "none") sexpRes)) $ isRight sexpRes
@@ -63,11 +154,12 @@ test2 width indentStyle = TestCase $ do
   putStrLn ""
   -}
 
-  let parseOut = sexpRes >>= return . pprintSExpr width indentStyle >>= parseSExpr
   assertBool ("parse out errors: " <>
-              (either id (const "none") parseOut)) $ isRight parseOut
-  assertEqual "round-trip" sexpRes parseOut
+              (either id (const "none") parseBound)) $ isRight parseBound
+  assertEqual "round-trip" sexpRes parseBound
 
+
+------------------------------------------------------------------------
 
 data FAtom = AIdent String
            | AQuoted String
@@ -111,6 +203,10 @@ pprintSExpr w i = encodeOne (setIndentStrategy (const i) $
                              setMaxWidth w $
                              setIndentAmount 1 $
                              basicPrint printAtom)
+
+getIdent :: FAtom -> Maybe String
+getIdent (AIdent s) = Just s
+getIdent _ = Nothing
 
 formatBV :: Int -> Integer -> T.Text
 formatBV w val = T.pack (prefix ++ printf fmt val)
