@@ -22,6 +22,7 @@ main = do
   putStrLn "Parsing a large S-expression"
   srcs <- mapM (\n -> (,) n <$> TIO.readFile n) [ "test/small-sample.sexp"
                                                 , "test/med-sample.sexp"
+                                                , "test/med2-sample.sexp"
                                                 , "test/big-sample.sexp"
                                                 ]
   counts <- runTestTT $ TestList
