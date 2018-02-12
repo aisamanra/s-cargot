@@ -161,29 +161,6 @@ testRoundTrip nm there back prep src = TestList
   ]
 
 
-test3 width indentStyle recursiveBound (name,src) = TestLabel name $ TestCase $ do
-  let sexpRes = parseSExpr src
-  assertBool ("parse errors: " <>
-              (either id (const "none") sexpRes)) $ isRight sexpRes
-
-  {-
-  putStrLn ""
-  putStrLn "----------------------------------------------------------------------"
-  putStrLn $ "File size: " <> (show $ T.length src)
-  putStrLn $ "Parsed: " <> show sexpRes
-  putStrLn ""
-  putStrLn $ "Flat Printed: " <> (show $ sexpRes >>= return . printSExpr)
-  putStrLn ""
-  putStrLn $ "Pretty Printed @ " <> show width <> ": "
-  mapM_ TIO.putStrLn  (T.lines $ pprintSExpr width indentStyle $ fromRight SNil sexpRes)
-  putStrLn ""
-  -}
-
-  assertBool ("parse out errors: " <>
-              (either id (const "none") parseBound)) $ isRight parseBound
-  assertEqual "round-trip" sexpRes parseBound
-
-
 ------------------------------------------------------------------------
 
 data FAtom = AIdent String
