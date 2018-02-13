@@ -1,3 +1,7 @@
+-- | This is a helper module that enables the use of let-bound
+-- variables in your S-expression.
+
+
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -9,7 +13,6 @@ module Data.SCargot.LetBind
     , DiscoveryGuide(..)
     , nativeGuide
       -- * Expanding
-    -- (insert let-bound variables and remove variable section)
     , letExpand
     )
     where
@@ -26,6 +29,9 @@ import           Data.Traversable ( mapAccumL )
 import           Data.Tuple
 
 
+-- | This object provides guidance to the 'discoverLetBindings'
+-- function, establishing various parameters for the discovery
+-- process.
 data DiscoveryGuide a str = Guide
     { maxLetBinds :: Int -> Int
       -- ^ Maximum number of let bindings to generate.  Given the
@@ -61,6 +67,7 @@ data DiscoveryGuide a str = Guide
     }
 
 
+-- | Returns a default 'DiscoveryGuide'.
 nativeGuide :: (str -> a) -> (str -> SExpr a -> a) -> DiscoveryGuide a str
 nativeGuide letMk labelMk = Guide { maxLetBinds = const 8
                                   , minExprSize = 5
@@ -92,6 +99,10 @@ defaultWeighting subexpr cnt =
                      _ -> 0
     in (baseline + h + (cnt * 4))
 
+
+-- | Called to convert a plain S-expression into one with let-bound
+-- variables.  The let bindings are "discovered" with the assistance
+-- of the guide.
 discoverLetBindings :: (Monoid str, IsString str, Eq a) =>
                         DiscoveryGuide a str -> SExpr a -> SExpr a
 discoverLetBindings guide inp =
@@ -106,7 +117,30 @@ discoverLetBindings guide inp =
 {- $ intro
 
 This module allows let bindings to be introduced into the S-Expression
-syntax.  The typical use is to add let bindings before serializing to
+syntax.
+
+For example, instead of:
+
+    (concat (if (enabled x) (+ (width x) (width y)) (width y))
+            " meters")
+
+this can be re-written with let bindings:
+
+    (let ((wy    (width y))
+          (wboth (+ (width x) wy))
+          (wide  (if (enabled x) wboth wy))
+         )
+      (concat wide " meters"))
+
+As S-expressions grow larger, let-binding can help readability for
+those expressions.  This module provides the 'discoverLetBindings'
+function that will convert an S-expression into one containing
+let-bound variables, and the inverse function 'letExpand' which will
+expand let-bound variables back into the expression.
+
+    id = letExpand . discoverLetBindings guide
+
+The typical use is to add let bindings before serializing to
 disk, and then expand the bindings after reading from the disk but
 before passing to other processing; this process allows the
 application using the S-Expressions to be unaware of the let-binding
@@ -181,22 +215,28 @@ bestBindings guide exprs locs = getMaxBest
           lwi l = (locExpr l, locCount l)
           maxbinds = maxLetBinds guide (length locs)
 
+
 type LocationId = Int
+
 data Location a = Location { locExpr :: SExpr a
                            , locCount :: Int
                            , locId :: LocationId
                            }
                 deriving Show
+
 data NamedLoc a = NamedLoc { nlocId :: LocationId
                            , nlocVar :: SExpr a
                            }
+                deriving Show
 
 data MyMap a = MyMap { points :: [Location a]
                      }
+
 startingLoc :: MyMap a
 startingLoc = MyMap []
 
 data ExprInfo a = EINil | EIAtom a | EICons LocationId (ExprInfo a) (ExprInfo a)
+
 
 explore :: Eq a => DiscoveryGuide a str -> MyMap a -> SExpr a -> (MyMap a, ExprInfo a)
 explore _ mymap SNil = (mymap, EINil)
@@ -227,6 +267,7 @@ findLocation loc = fndLoc
           fndLoc (EIAtom _) = Nothing
           fndLoc e@(EICons el l r) = if el == loc then Just e else fndLoc l <|> fndLoc r
 
+
 assignLBNames :: (Eq a, IsString str, Monoid str) =>
                  DiscoveryGuide a str -> SExpr a -> [Location a] -> [NamedLoc a]
 assignLBNames guide inp = snd . mapAccumL mkNamedLoc (1::Int)
@@ -237,6 +278,7 @@ assignLBNames guide inp = snd . mapAccumL mkNamedLoc (1::Int)
                                                           , nlocVar = SAtom nm
                                                           })
                                 Just _ -> mkNamedLoc (i+1) l  -- collision, try another varname
+
 
 substLBRefs :: Eq a =>
                DiscoveryGuide a str -> [NamedLoc a] -> ExprInfo a
@@ -261,7 +303,12 @@ substLBRefs _ nlocs = swap . fmap declVars . swap . subsRefs []
 
 -- ----------------------------------------------------------------------
 
-letExpand :: (Eq a, Show a, Eq str, IsString str) => (a -> Maybe str) -> SExpr a -> SExpr a
+-- | The 'letExpand' function is passed an S-expression that (may)
+-- contain let-bound variables and will return an equivalent
+-- S-expression that does not contain any let bindings, where let
+-- bindings have been expanded into the expression.
+letExpand :: (Eq a, Show a, Eq str, IsString str) =>
+             (a -> Maybe str) -> SExpr a -> SExpr a
 letExpand atomToText = findExpLet
     where findExpLet (SCons (SAtom a) (SCons lbvdefs (SCons subsInp SNil))) =
               if atomToText a == Just "let"
