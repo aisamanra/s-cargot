@@ -44,7 +44,9 @@ data DiscoveryGuide a str = Guide
       -- ^ Given an SExpr sub-expression and the count of occurrences
       -- of that sub-expression, return a weighting value that is used
       -- for sorting the discovered let bindings to choose the most
-      -- weighty 'maxLetBinds' for substitution.
+      -- weighty 'maxLetBinds' for substitution.  A sub-expression
+      -- with a weight of zero will be ignored (i.e. not let-bound);
+      -- one with a weight of 1000000 or more will always be bound.
 
     , letMaker :: (IsString str) => str -> a
       -- ^ Called to generate the "let" statement token itself.
@@ -100,29 +102,61 @@ in the language of the current S-expression.
 The 'weighting' function of the 'DiscoveryGuide' can be used to assign
 weights to various S-expression phrases: the S-expressions with the
 highest weights will be let-bound to variables (up to the
-'maxLetBinds' limit).
+'maxLetBinds' limit).  A weighting value of 0 will cause the
+sub-expression to be ignored (never let-bound) and a value of >=
+1000000 will *always* insert a let-binding, ignoring all other limits.
 
 -}
 
+alwaysBindWeight :: Int
+alwaysBindWeight = 1000000
+
 bestBindings :: DiscoveryGuide a str -> ExprInfo a -> [Location a] -> [Location a]
 bestBindings guide exprs locs = getMaxBest
-    where getMaxBest = last $
+    where getMaxBest = head $
+                       -- Sometimes a lengthy binding "swallows"
+                       -- everything else; skipping over it would
+                       -- result in more available bindings.  Try the
+                       -- first 3 combinations and take the one
+                       -- yielding the most bindings.
                        sortBy (compare `on` length) $
-                       fmap getBestSkipping [0..maxbinds*2]
-          getBestSkipping n = snd $ snd $
-                              foldl bestB ((n, 0), (maxbinds, [])) $
+                       fmap getBestSkipping [0..2]
+          getBestSkipping n = snd $ snd $  -- extract list of Locations
+                              -- determine top-set of best bindings to apply
+                              foldl bestB (n, (maxbinds, [])) $
+                              -- sorted by heaviest -> lightest
                               reverse $
-                              sortBy (compare `on` (uncurry (weighting guide) . lwi)) $
-                              filter ((/=) 0 . locCount) locs
-          bestB (_, (0, b)) _ = ((0::Int, 0::Int), (0, b))
-          bestB ((s,h), (n, b)) e = if not (allowRecursion guide) && isSubBinding e b
-                                    then ((s, h), (n, b))
-                                    else if s > 0
-                                         then ((s-1, h), (n, b))
-                                         else ((s, h), (n-1, e:b))
-          isSubBinding x = or . fmap (isSub x)
-          isSub x startingFrom = isJust (findLocation (locId startingFrom) exprs >>=
-                                         findLocation (locId x))
+                              sortBy (compare `on` fst) $
+                              filter ((/=) 0 . fst) $  -- remove weights of 0
+                              -- add weights
+                              fmap (\l -> (uncurry (weighting guide) $ lwi l, l)) $
+                              locs
+          -- bestB picks the best N bindings, where the bindings are
+          -- already sorted by weight, and optionally skipping an
+          -- initial count.  As an override, any binding whose weight
+          -- is 1_000_000 or above is *always* included in the
+          -- results.
+          bestB :: (Int, (Int, [Location a]))
+                -> (Int, Location a)
+                -> (Int, (Int, [Location a]))
+                   -- ^ ((skipcnt, ?), (numRemaining, selectedBinds))
+          bestB acc@(_, (numRemaining, binds)) (w,e) =
+              let subs = subBindings e binds
+              in if numRemaining > 0 &&
+                     (null subs || allowRecursion guide || w >= alwaysBindWeight)
+                 then addUnlessSkipping acc w e
+                 else acc
+          subBindings x = catMaybes . fmap (isSub x)
+          isSub x startingFrom = do sloc <- findLocation (locId startingFrom) exprs
+                                    findLocation (locId x) sloc
+          addUnlessSkipping (skip, (numRemaining, binds)) w e =
+              let addE = (minExprSize guide, (numRemaining-1, e:binds))
+                  skipE = (skip-1, (numRemaining, binds))
+              in if w >= alwaysBindWeight
+                 then addE
+                 else if numRemaining > 0 && skip == 0
+                      then addE
+                      else skipE
           lwi l = (locExpr l, locCount l)
           maxbinds = maxLetBinds guide (length locs)
 
