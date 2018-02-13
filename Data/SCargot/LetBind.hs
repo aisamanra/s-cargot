@@ -62,14 +62,35 @@ data DiscoveryGuide a str = Guide
 
 
 nativeGuide :: (str -> a) -> (str -> SExpr a -> a) -> DiscoveryGuide a str
-nativeGuide letMk labelMk = Guide { maxLetBinds = const 10
-                                  , minExprSize = 6
+nativeGuide letMk labelMk = Guide { maxLetBinds = const 8
+                                  , minExprSize = 5
                                   , allowRecursion = False
-                                  , weighting = \s cnt -> let h = F.length s
-                                                          in (h + (cnt * 4))
+                                  , weighting = defaultWeighting
                                   , letMaker = letMk
                                   , labelMaker = labelMk
                                   }
+
+
+-- | Provides a default weighting function for evaluating
+-- S-expressions.  The general algorithm here is:
+--
+--   1. S-expressions beginning with an atom on the left probably use
+--      that atom as a function name, and are therefore good
+--      candidates for clarity.  These sub-expressions get a baseline
+--      value of 100.
+--
+--   2. The frequency of occurrence matters.  It is 4 times more
+--      important than the size of the sub-expression.
+--
+--   3. Bigger sub-expressions are better candidates than smaller
+--      sub-expressions.
+defaultWeighting :: SExpr a -> Int -> Int
+defaultWeighting subexpr cnt =
+    let h = F.length subexpr
+        baseline = case subexpr of
+                     (SCons (SAtom _) _) -> 100
+                     _ -> 0
+    in (baseline + h + (cnt * 4))
 
 discoverLetBindings :: (Monoid str, IsString str, Eq a) =>
                         DiscoveryGuide a str -> SExpr a -> SExpr a
