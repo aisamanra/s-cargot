@@ -226,7 +226,10 @@ indentPrintSExpr SExprPrinter { .. } _ = pHead 0
 -- will be placed on following lines, it is possible that the first
 -- thing on a line (plus its indentation) may exceed the maxwidth.
 
-data PPS = PPS { indentWc :: Int
+type IndentSpec = Int
+type Indenting = Maybe IndentSpec
+
+data PPS = PPS { indentWc :: IndentSpec
                , remWidth :: Int
                , numClose :: Int
                }
@@ -279,8 +282,10 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
 
     addIndent (Nothing, t) = t
     addIndent (Just n, t) = indent n t
+    nextIndent = incrIndent indentAmount
+    incrIndent v n = n + v
 
-    pHead :: PPS -> SElem -> ( [(Maybe Int, Text)], PPS )
+    pHead :: PPS -> SElem -> ( [(Indenting, Text)], PPS )
     pHead pps (SText _ t) = ( [(Nothing, t)]
                             , pps { remWidth = remWidth pps - T.length t})
     pHead pps (SPair _ e1 e2) =
@@ -304,7 +309,9 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     pHead pps (SJoin els others) =
         let (t1,_) = pHead pps $ head others
             (t3,pps3) = foldl pTail' ([], pps) others
-            pTail' :: ([(Maybe Int, Text)], PPS) -> SElem -> ([(Maybe Int, Text)], PPS)
+            pTail' :: ([(Indenting, Text)], PPS)
+                   -> SElem
+                   -> ([(Indenting, Text)], PPS)
             pTail' (rl,pp) ne = let (rt,pr) = pTail pp ne
                                     hrl = head rl
                                     hrt = head rt
@@ -332,16 +339,16 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
             (to1,_) = pTail pps1 (head others)
             firstPlusFits = sElemSize first + sElemSize (head others) < (remWidth pps - 4)
             allFits = els < (remWidth pps - length others - 3)
-            pfxLen = indentAmount
             tryFirstArgSameLine = case swingIndent (SCons SNil (SCons SNil SNil)) of
                                     Align -> True
                                     _ -> False
-            pp2 = pps { indentWc = indentWc pps + pfxLen
-                      , remWidth = remWidth pps - 1 - pfxLen
+            pp2 = pps { indentWc = nextIndent (indentWc pps)
+                      , remWidth = remWidth pps - 1 - indentAmount
                       , numClose = numClose pps + 1
                       }
             t1h = head t1
-            pps1' = pps1 { indentWc = indentWc pps1 + T.length (snd t1h) + 1
+            pps1' = pps1 { indentWc = incrIndent (T.length (snd t1h) + 1)
+                                                 (indentWc pps1)
                          , remWidth = remWidth pps1 - T.length (snd t1h) - 1
                          }
             tothers = concatMap (fst . pTail pp2) others -- multiline
@@ -380,10 +387,10 @@ indentPrintSExpr2 SExprPrinter { .. } maxW sexpr =
     pTail = pHead
 
 
-wrapTWith :: Bool -> T.Text -> T.Text -> Int
+wrapTWith :: Bool -> T.Text -> T.Text -> IndentSpec
           -> T.Text
-          -> [(Maybe Int, T.Text)]
-          -> [(Maybe Int, T.Text)]
+          -> [(Indenting, T.Text)]
+          -> [(Indenting, T.Text)]
 wrapTWith isContinued st en ind hstart ts =
     let th = head ts
         tt = last ts
@@ -395,7 +402,7 @@ wrapTWith isContinued st en ind hstart ts =
              [ tp $ (fst tt, snd tt <> en) ])
        else [(fi, st <> hstart <> snd th <> en)]
 
-wrapT :: Int -> T.Text -> [(Maybe Int, T.Text)] -> [(Maybe Int, T.Text)]
+wrapT :: IndentSpec -> T.Text -> [(Indenting, T.Text)] -> [(Indenting, T.Text)]
 wrapT = wrapTWith False "(" ")"
 
 
