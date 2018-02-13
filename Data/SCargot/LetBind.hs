@@ -23,6 +23,7 @@ import           Data.Monoid
 import           Data.SCargot.Repr
 import           Data.String
 import           Data.Traversable ( mapAccumL )
+import           Data.Tuple
 
 
 data DiscoveryGuide a str = Guide
@@ -182,10 +183,11 @@ assignLBNames guide inp = snd . mapAccumL mkNamedLoc (1::Int)
                                                           })
                                 Just _ -> mkNamedLoc (i+1) l  -- collision, try another varname
 
-substLBRefs :: DiscoveryGuide a str -> [NamedLoc a] -> ExprInfo a
+substLBRefs :: Eq a =>
+               DiscoveryGuide a str -> [NamedLoc a] -> ExprInfo a
             -> (SExpr a, SExpr a)
                -- ^ (varbindings, exprwithvars)
-substLBRefs _ nlocs = subsRefs SNil
+substLBRefs _ nlocs = swap . fmap declVars . swap . subsRefs []
     where subsRefs b EINil = (b, SNil)
           subsRefs b (EIAtom a) = (b, SAtom a)
           subsRefs b (EICons i l r) = let (b',l') = subsRefs b l
@@ -193,9 +195,13 @@ substLBRefs _ nlocs = subsRefs SNil
                                           here = SCons l' r'
                                       in case hasBinding i of
                                            Nothing -> (c', here)
-                                           Just loc -> (addVar c' (nlocVar loc) here, (SCons (nlocVar loc) SNil))
+                                           Just loc -> (((nlocVar loc), here) : c', (SCons (nlocVar loc) SNil))
           hasBinding i = F.find ((==) i . nlocId) nlocs
-          addVar vl vn vv = SCons (SCons vn (SCons vv SNil)) vl
+          declVars = foldl addVar SNil . foldl addVarIfUnique []
+          addVarIfUnique vl v@(vn,_) = case lookup vn vl of
+                                         Nothing -> v : vl
+                                         Just _ -> vl
+          addVar vl (vn,vv) = SCons (SCons vn (SCons vv SNil)) vl
 
 
 -- ----------------------------------------------------------------------
