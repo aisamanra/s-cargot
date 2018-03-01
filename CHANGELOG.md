@@ -1,3 +1,10 @@
+v0.1.3.0
+=======
+
+* Added the ability to include source code locations
+in the parsed S-expressions.
+
+
 v0.1.2.0
 =======
 

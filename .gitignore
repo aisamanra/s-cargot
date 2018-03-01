@@ -6,3 +6,4 @@ dist-newstyle
 stack.yaml
 .stack-work
 cabal.project.local
+.ghc.environment.*
