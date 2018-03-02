@@ -1,3 +1,23 @@
+v0.1.3.0
+=======
+
+Features:
+
+* Added the `Located` type for source location tracking for `atom`
+  values (thanks ckoparkar!)
+* Added `unconstrainedPrint`, which does not try to restrict a printed
+  s-expression to a fixed width but will attempt to indent it in a
+  reasonable way nonetheless.
+
+Fixes:
+
+* Pretty-printing configurations created with `flatPrint` now use a
+  _much_ more efficient pretty-printer.
+* Internally, pretty-printers use a richer type which improves
+  performance somewhat by cutting down on repeated intermediate
+  printing, and future work will build on this to make printing even
+  more efficient.
+
 v0.1.2.0
 =======
 
