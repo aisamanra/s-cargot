@@ -1,3 +1,19 @@
+v0.1.4.0
+=======
+
+Features:
+
+* Added `encodeLazy` and `encodeOneLazy` functions to producing lazy
+  text
+
+Fixes:
+
+* Added the `Located` type for source location tracking for `atom`
+  values (thanks ckoparkar!)
+* Added `unconstrainedPrint`, which does not try to restrict a printed
+  s-expression to a fixed width but will attempt to indent it in a
+  reasonable way nonetheless.
+
 v0.1.3.0
 =======
 

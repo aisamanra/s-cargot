@@ -1,5 +1,5 @@
 name:                s-cargot
-version:             0.1.3.0
+version:             0.1.4.0
 synopsis:            A flexible, extensible s-expression library.
 homepage:            https://github.com/aisamanra/s-cargot
 description:         S-Cargot is a library for working with s-expressions in
@@ -29,6 +29,7 @@ flag build-example
   description: Build example application
   default:     False
 
+
 library
   exposed-modules:     Data.SCargot,
                        Data.SCargot.Repr,
@@ -50,6 +51,7 @@ library
   default-extensions:  CPP
   ghc-options:         -Wall
 
+
 executable example
   if !flag(build-example)
     buildable:         False
@@ -63,6 +65,7 @@ executable example
   default-language:    Haskell2010
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
 
+
 test-suite s-cargot-qc
   default-language: Haskell2010
   type:             exitcode-stdio-1.0
@@ -73,6 +76,7 @@ test-suite s-cargot-qc
                     parsec        >=3.1 && <4,
                     QuickCheck    >=2.8 && <3,
                     text          >=1.2 && <2
+
 
 test-suite s-cargot-printparse
   default-language: Haskell2010
