@@ -26,7 +26,7 @@ module Data.SCargot
   , Indent(..)
   , basicPrint
   , flatPrint
-  , unboundIndentPrint
+  , unconstrainedPrint
   , setFromCarrier
   , setMaxWidth
   , removeMaxWidth

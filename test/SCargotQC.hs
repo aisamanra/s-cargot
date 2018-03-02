@@ -74,7 +74,7 @@ prettyPrinter :: SExprPrinter () (SExpr ())
 prettyPrinter = basicPrint (const "X")
 
 widePrinter :: SExprPrinter () (SExpr ())
-widePrinter = unboundIndentPrint (const "X")
+widePrinter = unconstrainedPrint (const "X")
 
 
 richIso :: SExpr () -> Bool

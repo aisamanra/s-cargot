@@ -17,7 +17,7 @@ module Data.SCargot.Print
            -- * Default Printing Strategies
          , basicPrint
          , flatPrint
-         , unboundIndentPrint
+         , unconstrainedPrint
          ) where
 
 import qualified Data.Foldable as F
@@ -98,7 +98,7 @@ flatPrint printer = SExprPrinter
 
 -- | A default 'SExprPrinter' struct that will always swing subsequent
 --   expressions onto later lines if they're too long, indenting them
---   by two spaces.
+--   by two spaces, and uses a soft maximum width of 80 characters
 basicPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
 basicPrint printer = SExprPrinter
   { atomPrinter  = printer
@@ -109,8 +109,14 @@ basicPrint printer = SExprPrinter
   , indentPrint  = True
   }
 
-unboundIndentPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
-unboundIndentPrint printer = SExprPrinter
+-- | A default 'SExprPrinter' struct that will always swing subsequent
+-- expressions onto later lines if they're too long, indenting them by
+-- two spaces, but makes no effort to keep the pretty-printed sources
+-- inside a maximum width. In the case that we want indented printing
+-- but don't care about a "maximum" width, we can print more
+-- efficiently than in other situations.
+unconstrainedPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
+unconstrainedPrint printer = SExprPrinter
   { atomPrinter  = printer
   , fromCarrier  = id
   , swingIndent  = const Swing
@@ -125,7 +131,7 @@ unboundIndentPrint printer = SExprPrinter
 -- indent information around for each list
 data Intermediate
   = IAtom Text
-  | IList Indent (Seq.Seq Intermediate) (Maybe Text)
+  | IList Indent Intermediate (Seq.Seq Intermediate) (Maybe Text)
   | IEmpty
 
 
@@ -138,13 +144,13 @@ toIntermediate
     headOf (SAtom a)    = IAtom (printAtom a)
     headOf SNil         = IEmpty
     headOf (SCons x xs) =
-      gather (swing x) (Seq.singleton (headOf x)) xs
-    gather sw rs SNil =
-      IList sw rs Nothing
-    gather sw rs (SAtom a) =
-      IList sw rs (Just (printAtom a))
-    gather sw rs (SCons x xs) =
-      gather sw (rs Seq.|> headOf x) xs
+      gather (swing x) (headOf x) (Seq.empty) xs
+    gather sw hd rs SNil =
+      IList sw hd rs Nothing
+    gather sw hd rs (SAtom a) =
+      IList sw hd rs (Just (printAtom a))
+    gather sw hd rs (SCons x xs) =
+      gather sw hd (rs Seq.|> headOf x) xs
 
 
 unboundIndentPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> TL.Text
@@ -158,24 +164,23 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
     -- this case should never be called with an empty argument to
     -- @values@, as that should have been translated to @IEmpty@
     -- instead.
-    go (IList iv values rest)
+    go (IList iv initial values rest)
       -- if we're looking at an s-expression that has no nested
       -- s-expressions, then we might as well consider it flat and let
       -- it take the whole line
-      | Just strings <- T.traverse ppBasic values =
+      | Just strings <- T.traverse ppBasic (initial Seq.<| values) =
         Seq.singleton (B.fromString "(" <> buildUnwords strings <> pTail rest)
 
       -- it's not "flat", so we might want to swing after the first thing
       | Swing <- iv =
           -- if this match fails, then it means we've failed to
           -- convert to an Intermediate correctly!
-          let x Seq.:< xs = Seq.viewl values
-              butLast = insertParen (go x) <> fmap doIndent (F.foldMap go xs)
+          let butLast = insertParen (go initial) <> fmap doIndent (F.foldMap go values)
           in handleTail rest butLast
 
       -- ...or after several things
       | SwingAfter n <- iv =
-          let (hs, xs) = Seq.splitAt n values
+          let (hs, xs) = Seq.splitAt n (initial Seq.<| values)
               hd = B.fromString "(" <> buildUnwords (F.foldMap go hs)
               butLast = hd Seq.<| fmap doIndent (F.foldMap go xs)
           in handleTail rest butLast
@@ -183,24 +188,23 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
       -- the 'align' choice is clunkier because we need to know how
       -- deep to indent, so we have to force the first builder to grab its size
       | otherwise =
-        let x Seq.:< xs = Seq.viewl values
-            -- so we grab that and figure out its length plus two (for
+        let -- so we grab that and figure out its length plus two (for
             -- the leading paren and the following space). This uses a
             -- max because it's possible the first thing is itself a
             -- multi-line s-expression (in which case it seems like
             -- using the Align strategy is a terrible idea, but who am
             -- I to quarrel with the wild fruits upon the Tree of
             -- Life?)
-            len = 2 + F.maximum (fmap (TL.length . B.toLazyText) (go x))
-        in case Seq.viewl xs of
+            len = 2 + F.maximum (fmap (TL.length . B.toLazyText) (go initial))
+        in case Seq.viewl values of
           -- if there's nothing after the head of the expression, then
           -- we simply close it
-          Seq.EmptyL -> insertParen (insertCloseParen (go x))
+          Seq.EmptyL -> insertParen (insertCloseParen (go initial))
           -- otherwise, we put the first two things on the same line
           -- with spaces and everything else gets indended the
           -- forementioned length
           y Seq.:< ys ->
-            let hd = B.fromString "(" <> buildUnwords (F.foldMap go (Seq.fromList [x, y]))
+            let hd = B.fromString "(" <> buildUnwords (F.foldMap go (Seq.fromList [initial, y]))
                 butLast = hd Seq.<| fmap (doIndentOf (fromIntegral len)) (F.foldMap go ys)
             in handleTail rest butLast
             -- B.fromString "(" <> buildUnwords (F.foldMap go (Seq.fromList [x, y]))
@@ -297,29 +301,44 @@ setIndentStrategy :: (SExpr atom -> Indent) -> SExprPrinter atom carrier -> SExp
 setIndentStrategy st pr = pr { swingIndent = st }
 
 
--- Sort of like 'unlines' but without the trailing newline
-joinLines :: [Text] -> Text
-joinLines = T.intercalate "\n"
-
-
 -- Indents a line by n spaces
 indent :: Int -> Text -> Text
 indent n ts = T.replicate n " " <> ts
 
 
+-- Sort of like 'unlines' but without the trailing newline
+joinLinesS :: Seq.Seq Text -> Text
+joinLinesS s = case Seq.viewl s of
+  Seq.EmptyL -> ""
+  t Seq.:< ts
+    | F.null ts -> t
+    | otherwise -> t <> "\n" <> joinLinesS ts
+
+
+-- Sort of like 'unlines' but without the trailing newline
+unwordsS :: Seq.Seq Text -> Text
+unwordsS s = case Seq.viewl s of
+  Seq.EmptyL -> ""
+  t Seq.:< ts
+    | F.null ts -> t
+    | otherwise -> t <> " " <> joinLinesS ts
+
+
 -- Indents every line n spaces, and adds a newline to the beginning
 -- used in swung indents
-indentAll :: Int -> [Text] -> Text
-indentAll n = ("\n" <>) . joinLines . map (indent n)
+indentAllS :: Int -> Seq.Seq Text -> Text
+indentAllS n = ("\n" <>) . joinLinesS . fmap (indent n)
 
 
 -- Indents every line but the first by some amount
 -- used in aligned indents
-indentSubsequent :: Int -> [Text] -> Text
-indentSubsequent _ [] = ""
-indentSubsequent _ [t] = t
-indentSubsequent n (t:ts) = joinLines (t : go ts)
-  where go = map (indent n)
+indentSubsequentS :: Int -> Seq.Seq Text -> Text
+indentSubsequentS n s = case Seq.viewl s of
+  Seq.EmptyL -> ""
+  t Seq.:< ts
+    | F.null ts -> t
+    | otherwise -> joinLinesS (t Seq.<| fmap (indent n) ts)
+--      where go = fmap (indent n)
 
 
 -- oh god this code is so disgusting
@@ -334,83 +353,42 @@ prettyPrintSExpr pr@SExprPrinter { .. } expr = case maxWidth of
   Nothing
     | indentPrint -> TL.toStrict (unboundIndentPrintSExpr pr (fromCarrier expr))
     | otherwise   -> flatPrintSExpr (fmap atomPrinter (fromCarrier expr))
-  Just _  -> indentPrintSExpr pr expr
+  Just _  -> indentPrintSExpr' pr expr
 
 
-indentPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> Text
-indentPrintSExpr SExprPrinter { .. } = pHead 0
+indentPrintSExpr' :: SExprPrinter a (SExpr a) -> SExpr a -> Text
+indentPrintSExpr' pr@SExprPrinter { .. } = pp 0 . toIntermediate pr
   where
-    pHead _   SNil         = "()"
-    pHead _   (SAtom a)    = atomPrinter a
-    pHead ind (SCons x xs) = gather ind x xs id
-    gather ind h (SCons x xs) k = gather ind h xs (k . (x:))
-    gather ind h end          k = "(" <> hd <> body <> tl <> ")"
-      where tl   = case end of
-                     SNil      -> ""
-                     SAtom a   -> " . " <> atomPrinter a
-                     SCons _ _ -> error "[unreachable]"
-            hd   = indentSubsequent ind [pHead (ind+1) h]
-            lst  = k []
-            flat = T.unwords (map (pHead (ind+1)) lst)
-            headWidth = T.length hd + 1
-            indented =
-              case swingIndent h of
-                SwingAfter n ->
-                  let (l, ls) = splitAt n lst
-                      t  = T.unwords (map (pHead (ind+1)) l)
-                      ts = indentAll (ind + indentAmount)
-                           (map (pHead (ind + indentAmount)) ls)
-                  in t <> ts
-                Swing ->
-                  indentAll (ind + indentAmount)
-                  (map (pHead (ind + indentAmount)) lst)
-                Align ->
-                  indentSubsequent (ind + headWidth + 1)
-                  (map (pHead (ind + headWidth + 1)) lst)
-            body
-              | length lst == 0              = ""
-              | Just maxAmt <- maxWidth
-              , T.length flat + ind > maxAmt = " " <> indented
-              | otherwise = " " <> flat
+    pp _   IEmpty         = "()"
+    pp _   (IAtom t)    = t
+    pp ind (IList i h values end) = "(" <> hd <> body <> tl <> ")"
+      where
+        tl = case end of
+               Nothing -> ""
+               Just x  -> " . " <> x
+        hd = pp (ind+1) h
+        flat = unwordsS (fmap (pp (ind + 1)) values)
+        headWidth = T.length hd + 1
+        indented =
+          case i of
+            SwingAfter n ->
+              let (l, ls) = Seq.splitAt n values
+                  t  = unwordsS (fmap (pp (ind+1)) l)
+                  ts = indentAllS (ind + indentAmount)
+                       (fmap (pp (ind + indentAmount)) ls)
+              in t <> ts
+            Swing ->
+              indentAllS (ind + indentAmount)
+                (fmap (pp (ind + indentAmount)) values)
+            Align ->
+              indentSubsequentS (ind + headWidth + 1)
+                (fmap (pp (ind + headWidth + 1)) values)
+        body
+          | length values == 0 = ""
+          | Just maxAmt <- maxWidth
+          , T.length flat + ind > maxAmt = " " <> indented
+          | otherwise = " " <> flat
 
-  -- where
-  --   -- this is the base-case that knows how to print empty lists and
-  --   -- atoms
-  --   pHead _   SNil         = B.fromString "()"
-  --   pHead _   (SAtom a)    = B.fromText a
-  --   pHead ind (SCons x xs) = gather ind x xs id 0
-
-  --   -- otherwise, we trawl through the list grabbing every element...
-  --   gather ind h (SCons x xs) k r = gather ind h xs (k . (x:)) (r + T.length x)
-  --   gather ind h end          k r = B.fromString "(" <> hd <> body <> tl <> B.fromString ")"
-  --     where
-  --       tl   = case end of
-  --                SNil      -> mempty
-  --                SAtom a   -> B.fromString " . " <> B.fromText a
-  --                SCons _ _ -> error "[unreachable]"
-  --       hd   = indentSubsequent ind [pHead (ind+1) h]
-  --       lst  = k []
-  --       flat = T.unwords (map (pHead (ind+1)) lst)
-  --       headWidth = T.length hd + 1
-  --       indented =
-  --         case swingIndent h of
-  --           SwingAfter n ->
-  --             let (l, ls) = splitAt n lst
-  --                 t  = T.unwords (map (pHead (ind+1)) l)
-  --                 ts = indentAll (ind + indentAmount)
-  --                                (map (pHead (ind + indentAmount)) ls)
-  --             in t <> ts
-  --           Swing ->
-  --             indentAll (ind + indentAmount)
-  --               (map (pHead (ind + indentAmount)) lst)
-  --           Align ->
-  --             indentSubsequent (ind + headWidth + 1)
-  --               (map (pHead (ind + headWidth + 1)) lst)
-  --       body
-  --         | length lst == 0              = B.fromString ""
-  --         | Just maxAmt <- maxWidth
-  --         , T.length flat + ind > maxAmt = B.fromString " " <> indented
-  --         | otherwise                    = B.fromString " " <> flat
 
 -- if we don't indent anything, then we can ignore a bunch of the
 -- details above
