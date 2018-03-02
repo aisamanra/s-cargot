@@ -12,13 +12,14 @@ description:         S-Cargot is a library for working with s-expressions in
                      control over indentation in pretty-printing.
 license:             BSD3
 license-file:        LICENSE
-author:              Getty Ritter
-maintainer:          gettyritter@gmail.com
-copyright:           2015 Getty Ritter
+author:              Getty Ritter <s-cargot@infinitenegativeutility.com>
+maintainer:          Getty Ritter <s-cargot@infinitenegativeutility.com>
+copyright:           ©2018 Getty Ritter
 category:            Data
 build-type:          Simple
 cabal-version:       >=1.10
 bug-reports:         https://github.com/aisamanra/s-cargot/issues
+extra-source-files:  README.md, CHANGELOG.md
 
 source-repository head
   type: git
