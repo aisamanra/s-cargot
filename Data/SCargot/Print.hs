@@ -17,15 +17,20 @@ module Data.SCargot.Print
            -- * Default Printing Strategies
          , basicPrint
          , flatPrint
+         , unboundIndentPrint
          ) where
 
+import qualified Data.Foldable as F
 import           Data.Monoid ((<>))
+import qualified Data.Sequence as Seq
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as B
+import qualified Data.Traversable as T
 
 import           Data.SCargot.Repr
+
 
 -- | The 'Indent' type is used to determine how to indent subsequent
 --   s-expressions in a list, after printing the head of the list.
@@ -54,6 +59,7 @@ data Indent
           --   >      quux)
     deriving (Eq, Show)
 
+
 -- | A 'SExprPrinter' value describes how to print a given value as an
 --   s-expression. The @carrier@ type parameter indicates the value
 --   that will be printed, and the @atom@ parameter indicates the type
@@ -69,12 +75,16 @@ data SExprPrinter atom carrier = SExprPrinter
   , indentAmount :: Int
       -- ^ How much to indent after a swung indentation.
   , maxWidth     :: Maybe Int
-      -- ^ The maximum width (if any) If this is 'None' then
-      --   the resulting s-expression will always be printed
-      --   on a single line.
+      -- ^ The maximum width (if any) If this is 'None' then the
+      --   resulting s-expression might be printed on one line (if
+      --   'indentPrint' is 'False') and might be pretty-printed in
+      --   the most naive way possible (if 'indentPrint' is 'True').
+  , indentPrint :: Bool
+      -- ^ Whether to indent or not. This has been retrofitted onto
   }
 
--- | A default 'LayoutOptions' struct that will always print a 'SExpr'
+
+-- | A default 'SExprPrinter' struct that will always print a 'SExpr'
 --   as a single line.
 flatPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
 flatPrint printer = SExprPrinter
@@ -83,9 +93,10 @@ flatPrint printer = SExprPrinter
   , swingIndent  = const Swing
   , indentAmount = 2
   , maxWidth     = Nothing
+  , indentPrint  = False
   }
 
--- | A default 'LayoutOptions' struct that will always swing subsequent
+-- | A default 'SExprPrinter' struct that will always swing subsequent
 --   expressions onto later lines if they're too long, indenting them
 --   by two spaces.
 basicPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
@@ -95,7 +106,139 @@ basicPrint printer = SExprPrinter
   , swingIndent  = const Swing
   , indentAmount = 2
   , maxWidth     = Just 80
+  , indentPrint  = True
   }
+
+unboundIndentPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
+unboundIndentPrint printer = SExprPrinter
+  { atomPrinter  = printer
+  , fromCarrier  = id
+  , swingIndent  = const Swing
+  , indentAmount = 2
+  , maxWidth     = Nothing
+  , indentPrint  = True
+  }
+
+-- | This is an intermediate representation which is like (but not
+-- identical to) a RichSExpr representation. In particular, it has a
+-- special case for empty lists, and it also keeps a single piece of
+-- indent information around for each list
+data Intermediate
+  = IAtom Text
+  | IList Indent (Seq.Seq Intermediate) (Maybe Text)
+  | IEmpty
+
+
+toIntermediate :: SExprPrinter a (SExpr a) -> SExpr a -> Intermediate
+toIntermediate
+  SExprPrinter { atomPrinter = printAtom
+               , swingIndent = swing
+               } = headOf
+  where
+    headOf (SAtom a)    = IAtom (printAtom a)
+    headOf SNil         = IEmpty
+    headOf (SCons x xs) =
+      gather (swing x) (Seq.singleton (headOf x)) xs
+    gather sw rs SNil =
+      IList sw rs Nothing
+    gather sw rs (SAtom a) =
+      IList sw rs (Just (printAtom a))
+    gather sw rs (SCons x xs) =
+      gather sw (rs Seq.|> headOf x) xs
+
+
+unboundIndentPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> TL.Text
+unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
+  where
+    finalize = B.toLazyText . F.foldMap (<> B.fromString "\n")
+
+    go :: Intermediate -> Seq.Seq B.Builder
+    go (IAtom t) = Seq.singleton (B.fromText t)
+    go IEmpty    = Seq.singleton (B.fromString "()")
+    -- this case should never be called with an empty argument to
+    -- @values@, as that should have been translated to @IEmpty@
+    -- instead.
+    go (IList iv values rest)
+      -- if we're looking at an s-expression that has no nested
+      -- s-expressions, then we might as well consider it flat and let
+      -- it take the whole line
+      | Just strings <- T.traverse ppBasic values =
+        Seq.singleton (B.fromString "(" <> buildUnwords strings <> pTail rest)
+
+      -- it's not "flat", so we might want to swing after the first thing
+      | Swing <- iv =
+          -- if this match fails, then it means we've failed to
+          -- convert to an Intermediate correctly!
+          let x Seq.:< xs = Seq.viewl values
+              butLast = insertParen (go x) <> fmap doIndent (F.foldMap go xs)
+          in handleTail rest butLast
+
+      -- ...or after several things
+      | SwingAfter n <- iv =
+          let (hs, xs) = Seq.splitAt n values
+              hd = B.fromString "(" <> buildUnwords (F.foldMap go hs)
+              butLast = hd Seq.<| fmap doIndent (F.foldMap go xs)
+          in handleTail rest butLast
+
+      -- the 'align' choice is clunkier because we need to know how
+      -- deep to indent, so we have to force the first builder to grab its size
+      | otherwise =
+        let x Seq.:< xs = Seq.viewl values
+            -- so we grab that and figure out its length plus two (for
+            -- the leading paren and the following space). This uses a
+            -- max because it's possible the first thing is itself a
+            -- multi-line s-expression (in which case it seems like
+            -- using the Align strategy is a terrible idea, but who am
+            -- I to quarrel with the wild fruits upon the Tree of
+            -- Life?)
+            len = 2 + F.maximum (fmap (TL.length . B.toLazyText) (go x))
+        in case Seq.viewl xs of
+          -- if there's nothing after the head of the expression, then
+          -- we simply close it
+          Seq.EmptyL -> insertParen (insertCloseParen (go x))
+          -- otherwise, we put the first two things on the same line
+          -- with spaces and everything else gets indended the
+          -- forementioned length
+          y Seq.:< ys ->
+            let hd = B.fromString "(" <> buildUnwords (F.foldMap go (Seq.fromList [x, y]))
+                butLast = hd Seq.<| fmap (doIndentOf (fromIntegral len)) (F.foldMap go ys)
+            in handleTail rest butLast
+            -- B.fromString "(" <> buildUnwords (F.foldMap go (Seq.fromList [x, y]))
+            -- Seq.<| fmap (doIndentOf (fromIntegral len)) (handleTail rest (F.foldMap go ys))
+
+    doIndent :: B.Builder -> B.Builder
+    doIndent = doIndentOf (indentAmount spec)
+
+    doIndentOf :: Int -> B.Builder -> B.Builder
+    doIndentOf n b = B.fromText (T.replicate n " ") <> b
+
+    insertParen :: Seq.Seq B.Builder -> Seq.Seq B.Builder
+    insertParen s = case Seq.viewl s of
+      Seq.EmptyL -> s
+      x Seq.:< xs -> (B.fromString "(" <> x) Seq.<| xs
+
+    handleTail :: Maybe Text -> Seq.Seq B.Builder -> Seq.Seq B.Builder
+    handleTail Nothing = insertCloseParen
+    handleTail (Just t) =
+      (Seq.|> (B.fromString "." <> B.fromText t <> B.fromString ")"))
+
+    insertCloseParen :: Seq.Seq B.Builder -> Seq.Seq B.Builder
+    insertCloseParen s = case Seq.viewr s of
+      Seq.EmptyR -> Seq.singleton (B.fromString ")")
+      xs Seq.:> x -> xs Seq.|> (x <> B.fromString ")")
+
+    buildUnwords sq =
+      case Seq.viewl sq of
+      Seq.EmptyL -> mempty
+      t Seq.:< ts -> t <> F.foldMap (\ x -> B.fromString " " <> x) ts
+
+    pTail Nothing = B.fromString ")"
+    pTail (Just t) = B.fromString ". " <> B.fromText t <> B.fromString ")"
+
+    ppBasic (IAtom t) = Just (B.fromText t)
+    ppBasic (IEmpty) = Just (B.fromString "()")
+    ppBasic _ = Nothing
+
 
 -- | Modify the carrier type of a 'SExprPrinter' by describing how
 --   to convert the new type back to the previous type. For example,
@@ -108,6 +251,7 @@ basicPrint printer = SExprPrinter
 setFromCarrier :: (c -> b) -> SExprPrinter a b -> SExprPrinter a c
 setFromCarrier fc pr = pr { fromCarrier = fromCarrier pr . fc }
 
+
 -- | Dictate a maximum width for pretty-printed s-expressions.
 --
 -- >>> let printer = setMaxWidth 8 (basicPrint id)
@@ -115,6 +259,7 @@ setFromCarrier fc pr = pr { fromCarrier = fromCarrier pr . fc }
 -- "(one \n  two\n  three)"
 setMaxWidth :: Int -> SExprPrinter atom carrier -> SExprPrinter atom carrier
 setMaxWidth n pr = pr { maxWidth = Just n }
+
 
 -- | Allow the serialized s-expression to be arbitrarily wide. This
 --   makes all pretty-printing happen on a single line.
@@ -124,6 +269,7 @@ setMaxWidth n pr = pr { maxWidth = Just n }
 -- "(one two three)"
 removeMaxWidth :: SExprPrinter atom carrier -> SExprPrinter atom carrier
 removeMaxWidth pr = pr { maxWidth = Nothing }
+
 
 -- | Set the number of spaces that a subsequent line will be indented
 --   after a swing indentation.
@@ -135,6 +281,7 @@ removeMaxWidth pr = pr { maxWidth = Nothing }
 -- "(elephant \n    pachyderm)"
 setIndentAmount :: Int -> SExprPrinter atom carrier -> SExprPrinter atom carrier
 setIndentAmount n pr = pr { indentAmount = n }
+
 
 -- | Dictate how to indent subsequent lines based on the leading
 --   subexpression in an s-expression. For details on how this works,
@@ -149,18 +296,22 @@ setIndentAmount n pr = pr { indentAmount = n }
 setIndentStrategy :: (SExpr atom -> Indent) -> SExprPrinter atom carrier -> SExprPrinter atom carrier
 setIndentStrategy st pr = pr { swingIndent = st }
 
+
 -- Sort of like 'unlines' but without the trailing newline
 joinLines :: [Text] -> Text
 joinLines = T.intercalate "\n"
+
 
 -- Indents a line by n spaces
 indent :: Int -> Text -> Text
 indent n ts = T.replicate n " " <> ts
 
+
 -- Indents every line n spaces, and adds a newline to the beginning
 -- used in swung indents
 indentAll :: Int -> [Text] -> Text
 indentAll n = ("\n" <>) . joinLines . map (indent n)
+
 
 -- Indents every line but the first by some amount
 -- used in aligned indents
@@ -169,6 +320,7 @@ indentSubsequent _ [] = ""
 indentSubsequent _ [t] = t
 indentSubsequent n (t:ts) = joinLines (t : go ts)
   where go = map (indent n)
+
 
 -- oh god this code is so disgusting
 -- i'm sorry to everyone i let down by writing this
@@ -179,8 +331,11 @@ indentSubsequent n (t:ts) = joinLines (t : go ts)
 --   'LayoutOptions' value.
 prettyPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> Text
 prettyPrintSExpr pr@SExprPrinter { .. } expr = case maxWidth of
-  Nothing -> flatPrintSExpr (fmap atomPrinter (fromCarrier expr))
+  Nothing
+    | indentPrint -> TL.toStrict (unboundIndentPrintSExpr pr (fromCarrier expr))
+    | otherwise   -> flatPrintSExpr (fmap atomPrinter (fromCarrier expr))
   Just _  -> indentPrintSExpr pr expr
+
 
 indentPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> Text
 indentPrintSExpr SExprPrinter { .. } = pHead 0

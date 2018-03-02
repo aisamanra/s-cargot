@@ -73,6 +73,9 @@ printer = flatPrint (const "X")
 prettyPrinter :: SExprPrinter () (SExpr ())
 prettyPrinter = basicPrint (const "X")
 
+widePrinter :: SExprPrinter () (SExpr ())
+widePrinter = unboundIndentPrint (const "X")
+
 
 richIso :: SExpr () -> Bool
 richIso s = fromRich (toRich s) == s
@@ -96,6 +99,9 @@ encDec s = decodeOne parser (encodeOne printer s) == Right s
 encDecPretty :: SExpr () -> Bool
 encDecPretty s = decodeOne parser (encodeOne prettyPrinter s) == Right s
 
+encDecWide :: SExpr () -> Bool
+encDecWide s = decodeOne parser (encodeOne widePrinter s) == Right s
+
 decEnc :: EncodedSExpr -> Bool
 decEnc s = decodeOne parser (encoding s) == Right (original s)
 
@@ -109,6 +115,12 @@ encDecRichPretty s = decodeOne (asRich parser)
                                (encodeOne prettyPrinter (fromRich s))
                        == Right s
 
+encDecRichWide :: RichSExpr () -> Bool
+encDecRichWide s =
+  decodeOne (asRich parser)
+    (encodeOne widePrinter (fromRich s))
+  == Right s
+
 decEncRich :: EncodedSExpr -> Bool
 decEncRich s = decodeOne (asRich parser) (encoding s) == Right (toRich (original s))
 
@@ -120,6 +132,11 @@ encDecWF s = decodeOne (asWellFormed parser) (encodeOne printer (fromWellFormed 
 encDecWFPretty :: WellFormedSExpr () -> Bool
 encDecWFPretty s =
   decodeOne (asWellFormed parser) (encodeOne prettyPrinter (fromWellFormed s))
+    == Right s
+
+encDecWFWide :: WellFormedSExpr () -> Bool
+encDecWFWide s =
+  decodeOne (asWellFormed parser) (encodeOne widePrinter (fromWellFormed s))
     == Right s
 
 decEncWF :: EncodedSExpr -> Bool
@@ -169,6 +186,11 @@ main = do
   reallyQuickCheck encDecPretty
   reallyQuickCheck encDecRichPretty
   reallyQuickCheck encDecWFPretty
+
+  putStrLn "And it should be true if pretty-printed using the wide-format printer"
+  reallyQuickCheck encDecWide
+  reallyQuickCheck encDecRichWide
+  reallyQuickCheck encDecWFWide
 
   putStrLn "Comments should not affect parsing"
   reallyQuickCheck encDecLineComments
