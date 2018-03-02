@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Main where
 
@@ -11,9 +12,7 @@ import           Data.Monoid ((<>))
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Test.QuickCheck
-import           Test.QuickCheck.Arbitrary
 import           Text.Parsec (char)
-import           Text.Parsec.Text (Parser)
 
 instance Arbitrary a => Arbitrary (SExpr a) where
   arbitrary = sized $ \n ->
@@ -25,10 +24,10 @@ instance Arbitrary a => Arbitrary (SExpr a) where
                       elems <- sequence [ resize (n-k) arbitrary
                                         | _ <- [0..k]
                                         ]
-                      tail <- oneof [ SAtom <$> arbitrary
+                      rest <- oneof [ SAtom <$> arbitrary
                                     , pure SNil
                                     ]
-                      pure (foldr SCons tail elems)
+                      pure (foldr SCons rest elems)
                   ]
 
 instance Arbitrary a => Arbitrary (RichSExpr a) where
