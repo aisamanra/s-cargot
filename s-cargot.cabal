@@ -20,12 +20,6 @@ build-type:          Simple
 cabal-version:       >=1.10
 bug-reports:         https://github.com/aisamanra/s-cargot/issues
 
-
-extra-source-files:  test/big-sample.sexp
-                   , test/med-sample.sexp
-                   , test/med2-sample.sexp
-                   , test/small-sample.sexp
-
 source-repository head
   type: git
   location: git://github.com/aisamanra/s-cargot.git
@@ -77,15 +71,4 @@ test-suite s-cargot-qc
                     base          >=4.7 && <5,
                     parsec        >=3.1 && <4,
                     QuickCheck    >=2.8 && <3,
-                    text          >=1.2 && <2
-
-test-suite s-cargot-printparse
-  default-language: Haskell2010
-  type:             exitcode-stdio-1.0
-  hs-source-dirs:   test
-  main-is:          SCargotPrintParse.hs
-  build-depends:    s-cargot,
-                    base          >=4.7 && <5,
-                    parsec        >=3.1 && <4,
-                    HUnit         >=1.6 && <1.7,
                     text          >=1.2 && <2
