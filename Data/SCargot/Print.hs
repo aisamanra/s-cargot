@@ -194,7 +194,7 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
       -- s-expressions, then we might as well consider it flat and let
       -- it take the whole line
       | Just strings <- T.traverse ppBasic (initial Seq.<| values) =
-        Seq.singleton (B.fromString "(" <> buildUnwords strings <> pTail rest)
+        Seq.singleton (B.singleton '(' <> buildUnwords strings <> pTail rest)
 
       -- it's not "flat", so we might want to swing after the first thing
       | Swing <- iv =
@@ -206,7 +206,7 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
       -- ...or after several things
       | SwingAfter n <- iv =
           let (hs, xs) = Seq.splitAt n (initial Seq.<| values)
-              hd = B.fromString "(" <> buildUnwords (F.foldMap go hs)
+              hd = B.singleton '(' <> buildUnwords (F.foldMap go hs)
               butLast = hd Seq.<| fmap doIndent (F.foldMap go xs)
           in handleTail rest butLast
 
@@ -229,7 +229,7 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
           -- with spaces and everything else gets indended the
           -- forementioned length
           y Seq.:< ys ->
-            let hd = B.fromString "(" <> buildUnwords (F.foldMap go (Seq.fromList [initial, y]))
+            let hd = B.singleton '(' <> buildUnwords (F.foldMap go (Seq.fromList [initial, y]))
                 butLast = hd Seq.<| fmap (doIndentOf (fromIntegral len)) (F.foldMap go ys)
             in handleTail rest butLast
 
@@ -242,25 +242,25 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
     insertParen :: Seq.Seq B.Builder -> Seq.Seq B.Builder
     insertParen s = case Seq.viewl s of
       Seq.EmptyL -> s
-      x Seq.:< xs -> (B.fromString "(" <> x) Seq.<| xs
+      x Seq.:< xs -> (B.singleton '(' <> x) Seq.<| xs
 
     handleTail :: Maybe Text -> Seq.Seq B.Builder -> Seq.Seq B.Builder
     handleTail Nothing = insertCloseParen
     handleTail (Just t) =
-      (Seq.|> (B.fromString " . " <> B.fromText t <> B.fromString ")"))
+      (Seq.|> (B.fromString " . " <> B.fromText t <> B.singleton ')'))
 
     insertCloseParen :: Seq.Seq B.Builder -> Seq.Seq B.Builder
     insertCloseParen s = case Seq.viewr s of
-      Seq.EmptyR -> Seq.singleton (B.fromString ")")
-      xs Seq.:> x -> xs Seq.|> (x <> B.fromString ")")
+      Seq.EmptyR -> Seq.singleton (B.singleton ')')
+      xs Seq.:> x -> xs Seq.|> (x <> B.singleton ')')
 
     buildUnwords sq =
       case Seq.viewl sq of
       Seq.EmptyL -> mempty
-      t Seq.:< ts -> t <> F.foldMap (\ x -> B.fromString " " <> x) ts
+      t Seq.:< ts -> t <> F.foldMap (\ x -> B.singleton ' ' <> x) ts
 
-    pTail Nothing = B.fromString ")"
-    pTail (Just t) = B.fromString " . " <> B.fromText t <> B.fromString ")"
+    pTail Nothing = B.singleton ')'
+    pTail (Just t) = B.fromString " . " <> B.fromText t <> B.singleton ')'
 
     ppBasic (IAtom t) = Just (B.fromText t)
     ppBasic (IEmpty) = Just (B.fromString "()")
@@ -324,9 +324,13 @@ setIndentStrategy :: (SExpr atom -> Indent) -> SExprPrinter atom carrier -> SExp
 setIndentStrategy st pr = pr { swingIndent = st }
 
 
+spaceDot :: B.Builder
+spaceDot = B.singleton ' ' <> B.singleton '.' <> B.singleton ' '
+
 -- Indents a line by n spaces
 indent :: Int -> B.Builder -> B.Builder
-indent n ts = B.fromText (T.replicate n " ") <> ts
+indent n ts =
+  mconcat [ B.singleton ' ' | _ <- [1..n]] <> ts
 
 
 -- Sort of like 'unlines' but without the trailing newline
@@ -386,7 +390,7 @@ indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toInterm
     pp ind (IList i sz h values end) =
       -- we always are going to have a head, a (possibly empty) body,
       -- and a (possibly empty) tail in our list formats
-      B.fromString "(" <> hd <> body <> tl <> B.fromString ")"
+      B.singleton '(' <> hd <> body <> tl <> B.singleton ')'
       where
         -- the tail is either nothing, or the final dotted pair
         tl = case end of
@@ -416,10 +420,10 @@ indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toInterm
           | length values == 0 = mempty
           -- if we can't fit the whole next s-expression on the same
           -- line, then we use the indented form
-          | sizeSum sz + ind > maxAmt = B.fromString " " <> indented
+          | sizeSum sz + ind > maxAmt = B.singleton ' ' <> indented
           | otherwise =
             -- otherwise we print the whole thing on one line!
-            B.fromString " " <> unwordsS (fmap (pp (ind + 1)) values)
+            B.singleton ' ' <> unwordsS (fmap (pp (ind + 1)) values)
 
 
 -- if we don't indent anything, then we can ignore a bunch of the
@@ -428,18 +432,21 @@ flatPrintSExpr :: SExpr Text -> TL.Text
 flatPrintSExpr = B.toLazyText . pHead
   where
     pHead (SCons x xs) =
-      B.fromString "(" <> pHead x <> pTail xs
+      B.singleton '(' <> pHead x <> pTail xs
     pHead (SAtom t)    =
       B.fromText t
     pHead SNil         =
-      B.fromString "()"
+      B.singleton '(' <> B.singleton ')'
 
     pTail (SCons x xs) =
-      B.fromString " " <> pHead x <> pTail xs
+      B.singleton ' ' <> pHead x <> pTail xs
     pTail (SAtom t) =
-      B.fromString " . " <> B.fromText t <> B.fromString ")"
+      spaceDot <>
+      B.fromText t <>
+      B.singleton ')'
     pTail SNil =
-      B.fromString ")"
+      B.singleton ')'
+
 
 -- | Turn a single s-expression into a string according to a given
 --   'SExprPrinter'.
@@ -447,17 +454,20 @@ encodeOne :: SExprPrinter atom carrier -> carrier -> Text
 encodeOne s@(SExprPrinter { .. }) =
   TL.toStrict . prettyPrintSExpr (s { fromCarrier = id }) . fromCarrier
 
+
 -- | Turn a list of s-expressions into a single string according to
 --   a given 'SExprPrinter'.
 encode :: SExprPrinter atom carrier -> [carrier] -> Text
 encode spec =
   T.intercalate "\n\n" . map (encodeOne spec)
 
+
 -- | Turn a single s-expression into a lazy 'Text' according to a given
 --   'SExprPrinter'.
 encodeOneLazy :: SExprPrinter atom carrier -> carrier -> TL.Text
 encodeOneLazy s@(SExprPrinter { .. }) =
   prettyPrintSExpr (s { fromCarrier = id }) . fromCarrier
+
 
 -- | Turn a list of s-expressions into a lazy 'Text' according to
 --   a given 'SExprPrinter'.
