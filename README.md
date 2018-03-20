@@ -1,4 +1,4 @@
-[![Hackage](https://img.shields.io/hackage/v/s-cargot.svg)](https://hackage.haskell.org/package/s-cargot) https://img.shields.io/badge/stability-stable-green.svg
+[![Hackage](https://img.shields.io/hackage/v/s-cargot.svg)](https://hackage.haskell.org/package/s-cargot) ![stability: stable](https://img.shields.io/badge/stability-stable-green.svg)
 
 S-Cargot is a library for parsing and emitting S-expressions, designed to be flexible, customizable, and extensible. Different uses of S-expressions often understand subtly different variations on what an S-expression is. The goal of S-Cargot is to create several reusable components that can be repurposed to nearly any S-expression variant.
 
