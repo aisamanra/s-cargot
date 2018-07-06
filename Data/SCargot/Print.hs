@@ -145,11 +145,12 @@ data Intermediate
   -- final improper element (if it exists)
   | IEmpty
   -- ^ An empty list
+    deriving Show
 
 sizeOf :: Intermediate -> Size
 sizeOf IEmpty = Size 2 2
 sizeOf (IAtom t) = Size len len where len = T.length t
-sizeOf (IList _ s _ _ _) = s
+sizeOf (IList _ (Size n m) _ _ _) = Size (n + 2) (m + 2)
 
 concatSize :: Size -> Size -> Size
 concatSize l r = Size
@@ -348,14 +349,13 @@ unwordsS s = case Seq.viewl s of
   Seq.EmptyL -> ""
   t Seq.:< ts
     | F.null ts -> t
-    | otherwise -> t <> " " <> joinLinesS ts
+    | otherwise -> t <> " " <> unwordsS ts
 
 
 -- Indents every line n spaces, and adds a newline to the beginning
 -- used in swung indents
 indentAllS :: Int -> Seq.Seq B.Builder -> B.Builder
 indentAllS n = ("\n" <>) . joinLinesS . fmap (indent n)
-
 
 -- Indents every line but the first by some amount
 -- used in aligned indents
