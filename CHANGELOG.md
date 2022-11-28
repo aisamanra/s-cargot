@@ -1,3 +1,10 @@
+v0.1.5.0
+=======
+
+Fixes:
+
+* Bumped the `text` version to allow GHC 9.4 compatibility.
+
 v0.1.4.0
 =======
 
