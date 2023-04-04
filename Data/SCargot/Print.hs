@@ -409,7 +409,7 @@ indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toInterm
                        (fmap (pp (ind + indentAmount)) ls)
               in B.singleton ' ' <> t <> ts
             Swing ->
-              let nextInd = ind + indentAmount
+              let nextInd = ind + indentAmount + 1 -- 1 for (
               in indentAllS nextInd (fmap (pp nextInd) values)
             Align ->
               let nextInd = ind + headWidth + 1
