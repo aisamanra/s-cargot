@@ -59,6 +59,26 @@ main = do
               -- l1 = list of 1
               l1 = (SCons (SAtom (AIdent "hi")) SNil)
               pair = (SCons (SAtom (AIdent "hi")) (SAtom (AIdent "world")))
+              -- linl = list within a list
+              linl = (SCons
+                         (SAtom (AIdent "hi"))
+                         (SCons
+                           (SCons
+                            (SAtom (AIdent "world"))
+                            (SCons
+                              (SAtom (AIdent "and"))
+                              (SCons
+                                (SAtom (AIdent "people"))
+                                SNil)))
+                           (SCons
+                            (SAtom (AIdent "hallo"))
+                            (SCons
+                             (SAtom (AIdent "welt"))
+                             (SCons
+                               (SAtom (AIdent "und"))
+                               (SCons
+                                 (SAtom (AIdent "leute"))
+                                 SNil))))))
             in
             [ TestLabel "basic checks" $ TestList
               [ TestLabel "flat print" $ TestList
@@ -76,6 +96,8 @@ main = do
                   printSExpr l3ep
                 , TestLabel "flatprint list of 3" $ "(hi world hallo)" ~=?
                   printSExpr l3
+                , TestLabel "flatprint pair of list of 4" $ "(hi (world and people) hallo welt und leute)" ~=?
+                  printSExpr linl
                 ]
 
               , TestLabel "pretty print width 40" $
@@ -96,6 +118,8 @@ main = do
                   pprintIt l3ep
                 , TestLabel "pretty print list of 3" $ "(hi world hallo)" ~=?
                   pprintIt l3
+                , TestLabel "pretty print pair of list of 4" $ "(hi \n (world and people)\n hallo\n welt\n und\n leute)" ~=?
+                  pprintIt linl
                 ]
 
               , TestLabel "pretty print width 10" $
@@ -116,6 +140,8 @@ main = do
                   pprintIt l3ep
                 , TestLabel "pretty print list of 3" $ "(hi \n world\n hallo)" ~=?
                   pprintIt l3
+                , TestLabel "pretty print pair of list of 4" $ "(hi \n (world \n  and\n  people)\n hallo\n welt\n und\n leute)" ~=?
+                  pprintIt linl
                 ]
 
               , TestLabel "unconstrained print" $
@@ -136,6 +162,8 @@ main = do
                   pprintIt l3ep
                 , TestLabel "pretty print list of 3" $ "(hi world hallo)" ~=?
                   pprintIt l3
+                , TestLabel "pretty print pair of list of 4" $ "(hi\n (world and people)\n hallo\n welt\n und\n leute)" ~=?
+                  pprintIt linl
                 ]
 
               ]
