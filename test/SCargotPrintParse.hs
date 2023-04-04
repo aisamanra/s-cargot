@@ -118,7 +118,7 @@ main = do
                   pprintIt l3ep
                 , TestLabel "pretty print list of 3" $ "(hi world hallo)" ~=?
                   pprintIt l3
-                , TestLabel "pretty print pair of list of 4" $ "(hi \n (world and people)\n hallo\n welt\n und\n leute)" ~=?
+                , TestLabel "pretty print pair of list of 4" $ "(hi\n (world and people)\n hallo\n welt\n und\n leute)" ~=?
                   pprintIt linl
                 ]
 
@@ -133,14 +133,14 @@ main = do
                 , TestLabel "pretty print list of 2" $ "(hi world)" ~=?
                   pprintIt l2
                 , TestLabel "pretty print list of 2 pairs" $
-                  "((hi . hallo) \n world . welt)" ~=?
+                  "((hi . hallo)\n world . welt)" ~=?
                   pprintIt l2p
                 , TestLabel "pretty print list of 3 ending in a pair" $
-                  "(hi \n world\n hallo . welt)" ~=?
+                  "(hi\n world\n hallo . welt)" ~=?
                   pprintIt l3ep
-                , TestLabel "pretty print list of 3" $ "(hi \n world\n hallo)" ~=?
+                , TestLabel "pretty print list of 3" $ "(hi\n world\n hallo)" ~=?
                   pprintIt l3
-                , TestLabel "pretty print pair of list of 4" $ "(hi \n (world \n  and\n  people)\n hallo\n welt\n und\n leute)" ~=?
+                , TestLabel "pretty print pair of list of 4" $ "(hi\n (world\n  and\n  people)\n hallo\n welt\n und\n leute)" ~=?
                   pprintIt linl
                 ]
 

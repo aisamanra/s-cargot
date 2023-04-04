@@ -407,20 +407,21 @@ indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toInterm
                   t  = unwordsS (fmap (pp (ind+1)) l)
                   ts = indentAllS (ind + indentAmount)
                        (fmap (pp (ind + indentAmount)) ls)
-              in t <> ts
+              in B.singleton ' ' <> t <> ts
             Swing ->
-              indentAllS (ind + indentAmount)
-                (fmap (pp (ind + indentAmount)) values)
+              let nextInd = ind + indentAmount
+              in indentAllS nextInd (fmap (pp nextInd) values)
             Align ->
-              indentSubsequentS (ind + headWidth + 1)
-                (fmap (pp (ind + headWidth + 1)) values)
+              let nextInd = ind + headWidth + 1
+              in B.singleton ' ' <>
+                 indentSubsequentS nextInd (fmap (pp nextInd) values)
         body
           -- if there's nothing here, then we don't have anything to
           -- indent
           | length values == 0 = mempty
           -- if we can't fit the whole next s-expression on the same
           -- line, then we use the indented form
-          | sizeSum sz + ind > maxAmt = B.singleton ' ' <> indented
+          | sizeSum sz + ind > maxAmt = indented
           | otherwise =
             -- otherwise we print the whole thing on one line!
             B.singleton ' ' <> unwordsS (fmap (pp (ind + 1)) values)
