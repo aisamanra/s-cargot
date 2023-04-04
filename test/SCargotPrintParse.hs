@@ -78,7 +78,7 @@ main = do
                   printSExpr l3
                 ]
 
-              , TestLabel "pretty print" $
+              , TestLabel "pretty print width 40" $
                 let pprintIt = pprintSExpr 40 Swing in TestList
                 [ TestLabel "pretty print SNil" $ "()" ~=? pprintIt SNil
                 , TestLabel "pretty print SAtom" $ "hi" ~=? pprintIt (SAtom (AIdent "hi"))
@@ -95,6 +95,26 @@ main = do
                   "(hi world hallo . welt)" ~=?
                   pprintIt l3ep
                 , TestLabel "pretty print list of 3" $ "(hi world hallo)" ~=?
+                  pprintIt l3
+                ]
+
+              , TestLabel "pretty print width 10" $
+                let pprintIt = pprintSExpr 10 Swing in TestList
+                [ TestLabel "pretty print SNil" $ "()" ~=? pprintIt SNil
+                , TestLabel "pretty print SAtom" $ "hi" ~=? pprintIt (SAtom (AIdent "hi"))
+                , TestLabel "pretty print pair" $ "(hi . world)" ~=?
+                  pprintIt pair
+                , TestLabel "pretty print list of 1" $ "(hi)" ~=?
+                  pprintIt l1
+                , TestLabel "pretty print list of 2" $ "(hi world)" ~=?
+                  pprintIt l2
+                , TestLabel "pretty print list of 2 pairs" $
+                  "((hi . hallo) \n world . welt)" ~=?
+                  pprintIt l2p
+                , TestLabel "pretty print list of 3 ending in a pair" $
+                  "(hi \n world\n hallo . welt)" ~=?
+                  pprintIt l3ep
+                , TestLabel "pretty print list of 3" $ "(hi \n world\n hallo)" ~=?
                   pprintIt l3
                 ]
 
