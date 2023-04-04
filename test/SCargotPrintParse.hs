@@ -24,34 +24,58 @@ main = do
                                                 , "test/med2-sample.sexp"
                                                 , "test/big-sample.sexp"
                                                 ]
-  counts <- runTestTT $ TestList
+  counts <- runTestTT $ TestList $
+            let
+              -- l2p = list of 2 pairs
+              l2p = (SCons
+                      (SCons
+                        (SAtom (AIdent "hi"))
+                        (SAtom (AIdent "hallo")))
+                      (SCons
+                        (SAtom (AIdent "world"))
+                        (SAtom (AIdent "welt"))))
+              -- l3ep = list of 3 ending in a pair
+              l3ep = (SCons
+                       (SAtom (AIdent "hi"))
+                       (SCons
+                         (SAtom (AIdent "world"))
+                         (SCons
+                           (SAtom (AIdent "hallo"))
+                           (SAtom (AIdent "welt")))))
+              -- l3 = list of 3
+              l3 = (SCons
+                     (SAtom (AIdent "hi"))
+                     (SCons
+                       (SAtom (AIdent "world"))
+                       (SCons
+                         (SAtom (AIdent "hallo"))
+                         SNil)))
+              -- l2 = list of 2
+              l2 = (SCons
+                     (SAtom (AIdent "hi"))
+                     (SCons
+                       (SAtom (AIdent "world"))
+                       SNil))
+              -- l1 = list of 1
+              l1 = (SCons (SAtom (AIdent "hi")) SNil)
+              pair = (SCons (SAtom (AIdent "hi")) (SAtom (AIdent "world")))
+            in
             [ TestLabel "basic checks" $ TestList
               [ TestLabel "flat print" $ TestList
                 [ TestLabel "flatprint SNil" $ "()" ~=? printSExpr SNil
                 , TestLabel "flatprint SAtom" $ "hi" ~=? printSExpr (SAtom (AIdent "hi"))
                 , TestLabel "flatprint pair" $ "(hi . world)" ~=?
-                  printSExpr (SCons (SAtom (AIdent "hi")) (SAtom (AIdent "world")))
+                  printSExpr pair
                 , TestLabel "flatprint list of 1" $ "(hi)" ~=?
-                  printSExpr (SCons (SAtom (AIdent "hi")) SNil)
+                  printSExpr l1
                 , TestLabel "flatprint list of 2" $ "(hi world)" ~=?
-                  printSExpr (SCons (SAtom (AIdent "hi"))
-                                    (SCons (SAtom (AIdent "world"))
-                                           SNil))
+                  printSExpr l2
                 , TestLabel "flatprint list of 2 pairs" $ "((hi . hallo) world . welt)" ~=?
-                  printSExpr (SCons (SCons (SAtom (AIdent "hi"))
-                                           (SAtom (AIdent "hallo")))
-                                    (SCons (SAtom (AIdent "world"))
-                                           (SAtom (AIdent "welt"))))
+                  printSExpr l2p
                 , TestLabel "flatprint list of 3 ending in a pair" $ "(hi world hallo . welt)" ~=?
-                  printSExpr (SCons (SAtom (AIdent "hi"))
-                                    (SCons (SAtom (AIdent "world"))
-                                           (SCons (SAtom (AIdent "hallo"))
-                                                  (SAtom (AIdent "welt")))))
+                  printSExpr l3ep
                 , TestLabel "flatprint list of 3" $ "(hi world hallo)" ~=?
-                  printSExpr (SCons (SAtom (AIdent "hi"))
-                                    (SCons (SAtom (AIdent "world"))
-                                           (SCons (SAtom (AIdent "hallo"))
-                                                  SNil)))
+                  printSExpr l3
                 ]
 
               , TestLabel "pretty print" $
@@ -59,30 +83,19 @@ main = do
                 [ TestLabel "pretty print SNil" $ "()" ~=? pprintIt SNil
                 , TestLabel "pretty print SAtom" $ "hi" ~=? pprintIt (SAtom (AIdent "hi"))
                 , TestLabel "pretty print pair" $ "(hi . world)" ~=?
-                  pprintIt (SCons (SAtom (AIdent "hi")) (SAtom (AIdent "world")))
+                  pprintIt pair
                 , TestLabel "pretty print list of 1" $ "(hi)" ~=?
-                  pprintIt (SCons (SAtom (AIdent "hi")) SNil)
+                  pprintIt l1
                 , TestLabel "pretty print list of 2" $ "(hi world)" ~=?
-                  pprintIt (SCons (SAtom (AIdent "hi"))
-                                  (SCons (SAtom (AIdent "world"))
-                                         SNil))
+                  pprintIt l2
                 , TestLabel "pretty print list of 2 pairs" $
                   "((hi . hallo) world . welt)" ~=?
-                  pprintIt (SCons (SCons (SAtom (AIdent "hi"))
-                                         (SAtom (AIdent "hallo")))
-                                  (SCons (SAtom (AIdent "world"))
-                                         (SAtom (AIdent "welt"))))
+                  pprintIt l2p
                 , TestLabel "pretty print list of 3 ending in a pair" $
                   "(hi world hallo . welt)" ~=?
-                  pprintIt (SCons (SAtom (AIdent "hi"))
-                                  (SCons (SAtom (AIdent "world"))
-                                         (SCons (SAtom (AIdent "hallo"))
-                                                (SAtom (AIdent "welt")))))
+                  pprintIt l3ep
                 , TestLabel "pretty print list of 3" $ "(hi world hallo)" ~=?
-                  pprintIt (SCons (SAtom (AIdent "hi"))
-                                  (SCons (SAtom (AIdent "world"))
-                                         (SCons (SAtom (AIdent "hallo"))
-                                                SNil)))
+                  pprintIt l3
                 ]
 
               , TestLabel "unconstrained print" $
@@ -90,30 +103,19 @@ main = do
                 [ TestLabel "pretty print SNil" $ "()" ~=? pprintIt SNil
                 , TestLabel "pretty print SAtom" $ "hi" ~=? pprintIt (SAtom (AIdent "hi"))
                 , TestLabel "pretty print pair" $ "(hi . world)" ~=?
-                  pprintIt (SCons (SAtom (AIdent "hi")) (SAtom (AIdent "world")))
+                  pprintIt pair
                 , TestLabel "pretty print list of 1" $ "(hi)" ~=?
-                  pprintIt (SCons (SAtom (AIdent "hi")) SNil)
+                  pprintIt l1
                 , TestLabel "pretty print list of 2" $ "(hi world)" ~=?
-                  pprintIt (SCons (SAtom (AIdent "hi"))
-                                  (SCons (SAtom (AIdent "world"))
-                                         SNil))
+                  pprintIt l2
                 , TestLabel "pretty print list of 2 pairs" $
                   "((hi . hallo)\n world\n . welt)" ~=?
-                  pprintIt (SCons (SCons (SAtom (AIdent "hi"))
-                                         (SAtom (AIdent "hallo")))
-                                  (SCons (SAtom (AIdent "world"))
-                                         (SAtom (AIdent "welt"))))
+                  pprintIt l2p
                 , TestLabel "pretty print list of 3 ending in a pair" $
                   "(hi world hallo . welt)" ~=?
-                  pprintIt (SCons (SAtom (AIdent "hi"))
-                                  (SCons (SAtom (AIdent "world"))
-                                         (SCons (SAtom (AIdent "hallo"))
-                                                (SAtom (AIdent "welt")))))
+                  pprintIt l3ep
                 , TestLabel "pretty print list of 3" $ "(hi world hallo)" ~=?
-                  pprintIt (SCons (SAtom (AIdent "hi"))
-                                  (SCons (SAtom (AIdent "world"))
-                                         (SCons (SAtom (AIdent "hallo"))
-                                                SNil)))
+                  pprintIt l3
                 ]
 
               ]
