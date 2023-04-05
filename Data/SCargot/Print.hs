@@ -36,8 +36,9 @@ import           Data.SCargot.Repr
 
 -- | The 'Indent' type is used to determine how to indent subsequent
 --   s-expressions in a list, after printing the head of the list.  This only
---   applies if the entire list cannot be printed within the allowable maxWidth;
---   a sub-maxWidth printing will not add newlines or indentation.
+--   applies if the entire list cannot be printed within the allowable
+--   'SExprPrinter.maxWidth'; a sub-maxWidth printing will not add newlines or
+--   indentation.
 data Indent
   = Swing -- ^ A 'Swing' indent will indent subsequent exprs some fixed
           --   amount more than the current line.
@@ -46,6 +47,9 @@ data Indent
           --   >   bar
           --   >   baz
           --   >   quux)
+          --
+          -- Any 'SExprPrinter.indentAmount' applies relative to the entry at the
+          -- head of the list; in the above example, the indentAmount is 1.
   | SwingAfter Int -- ^ A 'SwingAfter' @n@ indent will try to print the
                    --   first @n@ expressions after the head on the same
                    --   line as the head, and all after will be swung.
@@ -54,9 +58,13 @@ data Indent
                    --   > (foo bar
                    --   >   baz
                    --   >   quux)
-  | Align -- ^ An 'Align' indent will print the first expression after
-          --   the head on the same line, and subsequent expressions will
-          --   be aligned with that one.
+                   --
+                   -- The 'SExprPrinter.indentAmount' is handled in the same way
+                   -- as for the 'Swing' setting.
+  | Align -- ^ An 'Align' indent will print the first expression after the head
+          -- on the same line, and subsequent expressions will be aligned with
+          -- that one.  Note that this ignores any 'SExprPrinter.indentAmount'
+          -- specified for the printer.
           --
           --   > (foo bar
           --   >      baz
@@ -77,14 +85,15 @@ data SExprPrinter atom carrier = SExprPrinter
       -- ^ How to indent subsequent expressions, as determined by
       --   the head of the list.
   , indentAmount :: Int
-      -- ^ How much to indent after a swung indentation.
+      -- ^ How much to indent after a swung indentation, relative to the *head*
+      -- element.
   , maxWidth     :: Maybe Int
-      -- ^ The maximum width (if any) If this is 'None' then the
-      --   resulting s-expression might be printed on one line (if
-      --   'indentPrint' is 'False') and might be pretty-printed in
-      --   the most naive way possible (if 'indentPrint' is 'True').
+      -- ^ The maximum width (if any) If this is 'None' then the resulting
+      --   s-expression might be printed on one line (if
+      --   'SExprPrinter.indentPrint' is 'False') and might be pretty-printed in
+      --   the most naive way possible (if 'SExprPrinter.indentPrint' is 'True').
   , indentPrint :: Bool
-      -- ^ Whether to indent or not. This has been retrofitted onto
+      -- ^ Whether to indent or not.
   }
 
 
