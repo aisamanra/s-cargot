@@ -34,6 +34,16 @@ main = do
                       (SCons
                         (SAtom (AIdent "world"))
                         (SAtom (AIdent "welt"))))
+              -- l3sp = list of 3 starting in a pair
+              l3sp = (SCons
+                       (SCons
+                         (SAtom (AIdent "hi"))
+                         (SAtom (AIdent "world")))
+                       (SCons
+                         (SAtom (AIdent "hallo"))
+                         (SCons
+                           (SAtom (AIdent "welt"))
+                           SNil)))
               -- l3ep = list of 3 ending in a pair
               l3ep = (SCons
                        (SAtom (AIdent "hi"))
@@ -50,6 +60,26 @@ main = do
                        (SCons
                          (SAtom (AIdent "hallo"))
                          SNil)))
+              -- l5p = list of 5 pairs
+              l5p = (SCons
+                      (SCons
+                        (SAtom (AIdent "hi"))
+                        (SAtom (AIdent "world")))
+                      (SCons
+                        (SCons
+                          (SAtom (AIdent "hallo"))
+                          (SAtom (AIdent "welt")))
+                        (SCons
+                          (SCons
+                            (SAtom (AIdent "bonjour"))
+                            (SAtom (AIdent "monde")))
+                          (SCons
+                            (SCons
+                              (SAtom (AIdent "hola"))
+                              (SAtom (AIdent "mundo")))
+                            (SCons
+                              (SAtom (AIdent "ciao"))
+                              (SAtom (AIdent "mundo")))))))
               -- l2 = list of 2
               l2 = (SCons
                      (SAtom (AIdent "hi"))
@@ -92,12 +122,19 @@ main = do
                   printSExpr l2
                 , TestLabel "flatprint list of 2 pairs" $ "((hi . hallo) world . welt)" ~=?
                   printSExpr l2p
+                , TestLabel "flatprint list of 3 starting in a pair" $
+                  -- pairs count as a single element
+                  "((hi . world) hallo welt)" ~=?
+                  printSExpr l3sp
                 , TestLabel "flatprint list of 3 ending in a pair" $ "(hi world hallo . welt)" ~=?
                   printSExpr l3ep
                 , TestLabel "flatprint list of 3" $ "(hi world hallo)" ~=?
                   printSExpr l3
                 , TestLabel "flatprint pair of list of 4" $ "(hi (world and people) hallo welt und leute)" ~=?
                   printSExpr linl
+                , TestLabel "flatprint list of 5 pairs" $
+                  "((hi . world) (hallo . welt) (bonjour . monde) (hola . mundo) ciao . mundo)" ~=?
+                  printSExpr l5p
                 ]
 
               , TestLabel "pretty print width 40" $
@@ -113,6 +150,10 @@ main = do
                 , TestLabel "pretty print list of 2 pairs" $
                   "((hi . hallo) world . welt)" ~=?
                   pprintIt l2p
+                , TestLabel "pretty print list of 3 starting in a pair" $
+                  -- pairs count as a single element
+                  "((hi . world) hallo welt)" ~=?
+                  pprintIt l3sp
                 , TestLabel "pretty print list of 3 ending in a pair" $
                   "(hi world hallo . welt)" ~=?
                   pprintIt l3ep
@@ -120,6 +161,9 @@ main = do
                   pprintIt l3
                 , TestLabel "pretty print pair of list of 4" $ "(hi\n  (world and people)\n  hallo\n  welt\n  und\n  leute)" ~=?
                   pprintIt linl
+                , TestLabel "pretty print list of 5 pairs" $
+                  "((hi . world)\n  (hallo . welt)\n  (bonjour . monde)\n  (hola . mundo)\n  ciao . mundo)" ~=?
+                  pprintIt l5p
                 ]
 
               , TestLabel "pretty print width 10" $
@@ -135,6 +179,10 @@ main = do
                 , TestLabel "pretty print list of 2 pairs" $
                   "((hi . hallo)\n  world . welt)" ~=?
                   pprintIt l2p
+                , TestLabel "pretty print list of 3 starting in a pair" $
+                  -- pairs count as a single element
+                  "((hi . world)\n  hallo\n  welt)" ~=?
+                  pprintIt l3sp
                 , TestLabel "pretty print list of 3 ending in a pair" $
                   "(hi\n  world\n  hallo . welt)" ~=?
                   pprintIt l3ep
@@ -142,6 +190,9 @@ main = do
                   pprintIt l3
                 , TestLabel "pretty print pair of list of 4" $ "(hi\n  (world\n    and\n    people)\n  hallo\n  welt\n  und\n  leute)" ~=?
                   pprintIt linl
+                , TestLabel "pretty print list of 5 pairs" $
+                  "((hi . world)\n  (hallo . welt)\n  (bonjour . monde)\n  (hola . mundo)\n  ciao . mundo)" ~=?
+                  pprintIt l5p
                 ]
 
               , TestLabel "pretty print width 10 swing-after 3" $
@@ -158,6 +209,10 @@ main = do
                   -- pairs are not split internally
                   "((hi . hallo) world . welt)" ~=?
                   pprintIt l2p
+                , TestLabel "pretty print list of 3 starting in a pair" $
+                  -- pairs count as a single element
+                  "((hi . world) hallo welt)" ~=?
+                  pprintIt l3sp
                 , TestLabel "pretty print list of 3 ending in a pair" $
                   -- pairs are not split internally
                   "(hi world hallo . welt)" ~=?
@@ -168,6 +223,9 @@ main = do
                   -- atom list pair\n ...
                   "(hi (world and people) hallo welt\n  und\n  leute)" ~=?
                   pprintIt linl
+                , TestLabel "pretty print list of 5 pairs" $
+                  "((hi . world) (hallo . welt) (bonjour . monde) (hola . mundo)\n  ciao . mundo)" ~=?
+                  pprintIt l5p
                 ]
 
               , TestLabel "pretty print width 10 aligned" $
@@ -183,13 +241,21 @@ main = do
                 , TestLabel "pretty print list of 2 pairs" $
                   "((hi . hallo) world . welt)" ~=?
                   pprintIt l2p
+                , TestLabel "pretty print list of 3 starting in a pair" $
+                  -- pairs count as a single element
+                  "((hi . world) hallo\n              welt)" ~=?
+                  pprintIt l3sp
                 , TestLabel "pretty print list of 3 ending in a pair" $
                   "(hi world\n    hallo . welt)" ~=?
                   pprintIt l3ep
                 , TestLabel "pretty print list of 3" $ "(hi world\n    hallo)" ~=?
                   pprintIt l3
-                , TestLabel "pretty print pair of list of 4" $ "(hi (world and\n           people)\n    hallo\n    welt\n    und\n    leute)" ~=?
+                , TestLabel "pretty print pair of list of 4" $
+                  "(hi (world and\n           people)\n    hallo\n    welt\n    und\n    leute)" ~=?
                   pprintIt linl
+                , TestLabel "pretty print list of 5 pairs" $
+                  "((hi . world) (hallo . welt)\n              (bonjour . monde)\n              (hola . mundo)\n              ciao . mundo)" ~=?
+                  pprintIt l5p
                 ]
 
               , TestLabel "unconstrained print" $
@@ -205,6 +271,10 @@ main = do
                 , TestLabel "pretty print list of 2 pairs" $
                   "((hi . hallo)\n world\n . welt)" ~=?
                   pprintIt l2p
+                , TestLabel "pretty print list of 3 starting in a pair" $
+                  -- pairs count as a single element
+                  "((hi . world)\n hallo\n welt)" ~=?
+                  pprintIt l3sp
                 , TestLabel "pretty print list of 3 ending in a pair" $
                   "(hi world hallo . welt)" ~=?
                   pprintIt l3ep
@@ -212,6 +282,9 @@ main = do
                   pprintIt l3
                 , TestLabel "pretty print pair of list of 4" $ "(hi\n (world and people)\n hallo\n welt\n und\n leute)" ~=?
                   pprintIt linl
+                , TestLabel "pretty print list of 5 pairs" $
+                  "((hi . world)\n (hallo . welt)\n (bonjour . monde)\n (hola . mundo)\n ciao\n . mundo)" ~=?
+                  pprintIt l5p
                 ]
 
               ]

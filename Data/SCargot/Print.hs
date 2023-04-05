@@ -172,7 +172,8 @@ toIntermediate
       IList sw sz hd rs Nothing
     gather sw hd rs (SAtom a) sz =
       IList sw (sz `concatSize` aSize) hd rs (Just aStr)
-        where aSize = Size (T.length aStr) (T.length aStr)
+        where aSize = Size aLen aLen
+              aLen = T.length aStr + 2 -- 2 for the ". " between the pair
               aStr = printAtom a
     gather sw hd rs (SCons x xs) sz =
       gather sw hd (rs Seq.|> x') xs (sz `concatSize` sizeOf x')
