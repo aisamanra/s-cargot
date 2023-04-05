@@ -355,7 +355,9 @@ unwordsS s = case Seq.viewl s of
 -- Indents every line n spaces, and adds a newline to the beginning
 -- used in swung indents
 indentAllS :: Int -> Seq.Seq B.Builder -> B.Builder
-indentAllS n = ("\n" <>) . joinLinesS . fmap (indent n)
+indentAllS n s = if Seq.null s
+                 then ""
+                 else ("\n" <>) $ joinLinesS $ fmap (indent n) s
 
 -- Indents every line but the first by some amount
 -- used in aligned indents
@@ -404,9 +406,9 @@ indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toInterm
           case i of
             SwingAfter n ->
               let (l, ls) = Seq.splitAt n values
-                  t  = unwordsS (fmap (pp (ind+1)) l)
-                  ts = indentAllS (ind + indentAmount)
-                       (fmap (pp (ind + indentAmount)) ls)
+                  t  = unwordsS (fmap (pp (ind+1+1)) l) -- 1 for (, 1 for ' '
+                  nextInd = ind + indentAmount + 1 -- 1 for (
+                  ts = indentAllS nextInd (fmap (pp nextInd) ls)
               in B.singleton ' ' <> t <> ts
             Swing ->
               let nextInd = ind + indentAmount + 1 -- 1 for (

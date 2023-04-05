@@ -144,6 +144,32 @@ main = do
                   pprintIt linl
                 ]
 
+              , TestLabel "pretty print width 10 swing-after 3" $
+                let pprintIt = pprintSExpr 10 (SwingAfter 3) in TestList
+                [ TestLabel "pretty print SNil" $ "()" ~=? pprintIt SNil
+                , TestLabel "pretty print SAtom" $ "hi" ~=? pprintIt (SAtom (AIdent "hi"))
+                , TestLabel "pretty print pair" $ "(hi . world)" ~=?
+                  pprintIt pair
+                , TestLabel "pretty print list of 1" $ "(hi)" ~=?
+                  pprintIt l1
+                , TestLabel "pretty print list of 2" $ "(hi world)" ~=?
+                  pprintIt l2
+                , TestLabel "pretty print list of 2 pairs" $
+                  -- pairs are not split internally
+                  "((hi . hallo) world . welt)" ~=?
+                  pprintIt l2p
+                , TestLabel "pretty print list of 3 ending in a pair" $
+                  -- pairs are not split internally
+                  "(hi world hallo . welt)" ~=?
+                  pprintIt l3ep
+                , TestLabel "pretty print list of 3" $ "(hi world hallo)" ~=?
+                  pprintIt l3
+                , TestLabel "pretty print pair of list of 4" $
+                  -- atom list pair\n ...
+                  "(hi (world and people) hallo welt\n  und\n  leute)" ~=?
+                  pprintIt linl
+                ]
+
               , TestLabel "pretty print width 10 aligned" $
                 let pprintIt = pprintSExpr 10 Align in TestList
                 [ TestLabel "pretty print SNil" $ "()" ~=? pprintIt SNil
