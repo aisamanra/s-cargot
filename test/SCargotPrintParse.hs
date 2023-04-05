@@ -333,21 +333,21 @@ main = do
                 , TestLabel "pretty print list of 2" $ "(hi world)" ~=?
                   pprintIt l2
                 , TestLabel "pretty print list of 2 pairs" $
-                  "((hi . hallo)\n world\n . welt)" ~=?
+                  "((hi . hallo)\n  world\n  . welt)" ~=?
                   pprintIt l2p
                 , TestLabel "pretty print list of 3 starting in a pair" $
                   -- pairs count as a single element
-                  "((hi . world)\n hallo\n welt)" ~=?
+                  "((hi . world)\n  hallo\n  welt)" ~=?
                   pprintIt l3sp
                 , TestLabel "pretty print list of 3 ending in a pair" $
                   "(hi world hallo . welt)" ~=?
                   pprintIt l3ep
                 , TestLabel "pretty print list of 3" $ "(hi world hallo)" ~=?
                   pprintIt l3
-                , TestLabel "pretty print pair of list of 4" $ "(hi\n (world and people)\n hallo\n welt\n und\n leute)" ~=?
+                , TestLabel "pretty print pair of list of 4" $ "(hi\n  (world and people)\n  hallo\n  welt\n  und\n  leute)" ~=?
                   pprintIt linl
                 , TestLabel "pretty print list of 5 pairs" $
-                  "((hi . world)\n (hallo . welt)\n (bonjour . monde)\n (hola . mundo)\n ciao\n . mundo)" ~=?
+                  "((hi . world)\n  (hallo . welt)\n  (bonjour . monde)\n  (hola . mundo)\n  ciao\n  . mundo)" ~=?
                   pprintIt l5p
                 ]
 

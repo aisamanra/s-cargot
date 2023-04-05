@@ -233,7 +233,7 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
             in handleTail rest butLast
 
     doIndent :: B.Builder -> B.Builder
-    doIndent = doIndentOf (indentAmount spec)
+    doIndent = doIndentOf (indentAmount spec + 1) -- 1 for '('
 
     doIndentOf :: Int -> B.Builder -> B.Builder
     doIndentOf n b = B.fromText (T.replicate n " ") <> b
@@ -246,7 +246,9 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
     handleTail :: Maybe Text -> Seq.Seq B.Builder -> Seq.Seq B.Builder
     handleTail Nothing = insertCloseParen
     handleTail (Just t) =
-      (Seq.|> (B.fromString " . " <> B.fromText t <> B.singleton ')'))
+      let txtInd = B.fromText $ T.replicate (indentAmount spec) " "
+          sep = B.fromString " . "
+      in (Seq.|> (txtInd <> sep <> B.fromText t <> B.singleton ')'))
 
     insertCloseParen :: Seq.Seq B.Builder -> Seq.Seq B.Builder
     insertCloseParen s = case Seq.viewr s of
