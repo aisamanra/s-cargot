@@ -35,7 +35,9 @@ import           Data.SCargot.Repr
 
 
 -- | The 'Indent' type is used to determine how to indent subsequent
---   s-expressions in a list, after printing the head of the list.
+--   s-expressions in a list, after printing the head of the list.  This only
+--   applies if the entire list cannot be printed within the allowable maxWidth;
+--   a sub-maxWidth printing will not add newlines or indentation.
 data Indent
   = Swing -- ^ A 'Swing' indent will indent subsequent exprs some fixed
           --   amount more than the current line.

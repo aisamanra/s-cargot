@@ -292,6 +292,36 @@ main = do
                   pprintIt l5p
                 ]
 
+              , TestLabel "pretty print width 400" $
+                let pprintIt = pprintSExpr 400 Swing in TestList
+                [ TestLabel "pretty print SNil" $ "()" ~=? pprintIt SNil
+                , TestLabel "pretty print SAtom" $ "hi" ~=? pprintIt (SAtom (AIdent "hi"))
+                , TestLabel "pretty print pair" $ "(hi . world)" ~=?
+                  pprintIt pair
+                , TestLabel "pretty print list of 1" $ "(hi)" ~=?
+                  pprintIt l1
+                , TestLabel "pretty print list of 2" $ "(hi world)" ~=?
+                  pprintIt l2
+                , TestLabel "pretty print list of 2 pairs" $
+                  -- No Swing if it fits on a line
+                  "((hi . hallo) world . welt)" ~=?
+                  pprintIt l2p
+                , TestLabel "pretty print list of 3 starting in a pair" $
+                  -- pairs count as a single element
+                  "((hi . world) hallo welt)" ~=?
+                  pprintIt l3sp
+                , TestLabel "pretty print list of 3 ending in a pair" $
+                  "(hi world hallo . welt)" ~=?
+                  pprintIt l3ep
+                , TestLabel "pretty print list of 3" $ "(hi world hallo)" ~=?
+                  pprintIt l3
+                , TestLabel "pretty print pair of list of 4" $ "(hi (world and people) hallo welt und leute)" ~=?
+                  pprintIt linl
+                , TestLabel "pretty print list of 5 pairs" $
+                  "((hi . world) (hallo . welt) (bonjour . monde) (hola . mundo) ciao . mundo)" ~=?
+                  pprintIt l5p
+                ]
+
               , TestLabel "unconstrained print" $
                 let pprintIt = ucPrintSExpr Swing in TestList
                 [ TestLabel "pretty print SNil" $ "()" ~=? pprintIt SNil
