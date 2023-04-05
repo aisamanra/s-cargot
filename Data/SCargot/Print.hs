@@ -89,14 +89,7 @@ data SExprPrinter atom carrier = SExprPrinter
 -- | A default 'SExprPrinter' struct that will always print a 'SExpr'
 --   as a single line.
 flatPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
-flatPrint printer = SExprPrinter
-  { atomPrinter  = printer
-  , fromCarrier  = id
-  , swingIndent  = const Swing
-  , indentAmount = 2
-  , maxWidth     = Nothing
-  , indentPrint  = False
-  }
+flatPrint = (\p -> p { indentPrint = False}) . removeMaxWidth . basicPrint
 
 -- | A default 'SExprPrinter' struct that will always swing subsequent
 --   expressions onto later lines if they're too long, indenting them
@@ -118,14 +111,7 @@ basicPrint printer = SExprPrinter
 -- but don't care about a "maximum" width, we can print more
 -- efficiently than in other situations.
 unconstrainedPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
-unconstrainedPrint printer = SExprPrinter
-  { atomPrinter  = printer
-  , fromCarrier  = id
-  , swingIndent  = const Swing
-  , indentAmount = 2
-  , maxWidth     = Nothing
-  , indentPrint  = True
-  }
+unconstrainedPrint = removeMaxWidth . basicPrint
 
 data Size = Size
   { sizeSum :: !Int
@@ -154,7 +140,7 @@ sizeOf (IList _ (Size n m) _ _ _) = Size (n + 2) (m + 2)
 
 concatSize :: Size -> Size -> Size
 concatSize l r = Size
-  { sizeSum = sizeSum l + 1 + sizeSum r
+  { sizeSum = sizeSum l + 1 + sizeSum r  -- 1 for the ' ' between elements
   , sizeMax = sizeMax l `max` sizeMax r
   }
 
@@ -402,7 +388,6 @@ indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toInterm
         -- the head is the pretty-printed head, with an ambient
         -- indentation of +1 to account for the left paren
         hd = pp (ind+1) h
-        headWidth = sizeSum (sizeOf h)
         indented =
           case i of
             SwingAfter n ->
@@ -415,7 +400,8 @@ indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toInterm
               let nextInd = ind + indentAmount + 1 -- 1 for (
               in indentAllS nextInd (fmap (pp nextInd) values)
             Align ->
-              let nextInd = ind + headWidth + 1 + 1 -- 1 for (, 1 for ' ' below
+              let headWidth = sizeSum (sizeOf h)
+                  nextInd = ind + headWidth + 1 + 1 -- 1 for (, 1 for ' ' below
               in B.singleton ' ' <>
                  indentSubsequentS nextInd (fmap (pp nextInd) values)
         body
