@@ -35,7 +35,10 @@ import           Data.SCargot.Repr
 
 
 -- | The 'Indent' type is used to determine how to indent subsequent
---   s-expressions in a list, after printing the head of the list.
+--   s-expressions in a list, after printing the head of the list.  This only
+--   applies if the entire list cannot be printed within the allowable
+--   'SExprPrinter.maxWidth'; a sub-maxWidth printing will not add newlines or
+--   indentation.
 data Indent
   = Swing -- ^ A 'Swing' indent will indent subsequent exprs some fixed
           --   amount more than the current line.
@@ -44,6 +47,9 @@ data Indent
           --   >   bar
           --   >   baz
           --   >   quux)
+          --
+          -- Any 'SExprPrinter.indentAmount' applies relative to the entry at the
+          -- head of the list; in the above example, the indentAmount is 1.
   | SwingAfter Int -- ^ A 'SwingAfter' @n@ indent will try to print the
                    --   first @n@ expressions after the head on the same
                    --   line as the head, and all after will be swung.
@@ -52,9 +58,13 @@ data Indent
                    --   > (foo bar
                    --   >   baz
                    --   >   quux)
-  | Align -- ^ An 'Align' indent will print the first expression after
-          --   the head on the same line, and subsequent expressions will
-          --   be aligned with that one.
+                   --
+                   -- The 'SExprPrinter.indentAmount' is handled in the same way
+                   -- as for the 'Swing' setting.
+  | Align -- ^ An 'Align' indent will print the first expression after the head
+          -- on the same line, and subsequent expressions will be aligned with
+          -- that one.  Note that this ignores any 'SExprPrinter.indentAmount'
+          -- specified for the printer.
           --
           --   > (foo bar
           --   >      baz
@@ -75,28 +85,22 @@ data SExprPrinter atom carrier = SExprPrinter
       -- ^ How to indent subsequent expressions, as determined by
       --   the head of the list.
   , indentAmount :: Int
-      -- ^ How much to indent after a swung indentation.
+      -- ^ How much to indent after a swung indentation, relative to the *head*
+      -- element.
   , maxWidth     :: Maybe Int
-      -- ^ The maximum width (if any) If this is 'None' then the
-      --   resulting s-expression might be printed on one line (if
-      --   'indentPrint' is 'False') and might be pretty-printed in
-      --   the most naive way possible (if 'indentPrint' is 'True').
+      -- ^ The maximum width (if any) If this is 'None' then the resulting
+      --   s-expression might be printed on one line (if
+      --   'SExprPrinter.indentPrint' is 'False') and might be pretty-printed in
+      --   the most naive way possible (if 'SExprPrinter.indentPrint' is 'True').
   , indentPrint :: Bool
-      -- ^ Whether to indent or not. This has been retrofitted onto
+      -- ^ Whether to indent or not.
   }
 
 
 -- | A default 'SExprPrinter' struct that will always print a 'SExpr'
 --   as a single line.
 flatPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
-flatPrint printer = SExprPrinter
-  { atomPrinter  = printer
-  , fromCarrier  = id
-  , swingIndent  = const Swing
-  , indentAmount = 2
-  , maxWidth     = Nothing
-  , indentPrint  = False
-  }
+flatPrint = (\p -> p { indentPrint = False}) . removeMaxWidth . basicPrint
 
 -- | A default 'SExprPrinter' struct that will always swing subsequent
 --   expressions onto later lines if they're too long, indenting them
@@ -118,14 +122,7 @@ basicPrint printer = SExprPrinter
 -- but don't care about a "maximum" width, we can print more
 -- efficiently than in other situations.
 unconstrainedPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
-unconstrainedPrint printer = SExprPrinter
-  { atomPrinter  = printer
-  , fromCarrier  = id
-  , swingIndent  = const Swing
-  , indentAmount = 2
-  , maxWidth     = Nothing
-  , indentPrint  = True
-  }
+unconstrainedPrint = removeMaxWidth . basicPrint
 
 data Size = Size
   { sizeSum :: !Int
@@ -154,7 +151,7 @@ sizeOf (IList _ (Size n m) _ _ _) = Size (n + 2) (m + 2)
 
 concatSize :: Size -> Size -> Size
 concatSize l r = Size
-  { sizeSum = sizeSum l + 1 + sizeSum r
+  { sizeSum = sizeSum l + 1 + sizeSum r  -- 1 for the ' ' between elements
   , sizeMax = sizeMax l `max` sizeMax r
   }
 
@@ -172,7 +169,8 @@ toIntermediate
       IList sw sz hd rs Nothing
     gather sw hd rs (SAtom a) sz =
       IList sw (sz `concatSize` aSize) hd rs (Just aStr)
-        where aSize = Size (T.length aStr) (T.length aStr)
+        where aSize = Size aLen aLen
+              aLen = T.length aStr + 2 -- 2 for the ". " between the pair
               aStr = printAtom a
     gather sw hd rs (SCons x xs) sz =
       gather sw hd (rs Seq.|> x') xs (sz `concatSize` sizeOf x')
@@ -235,7 +233,7 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
             in handleTail rest butLast
 
     doIndent :: B.Builder -> B.Builder
-    doIndent = doIndentOf (indentAmount spec)
+    doIndent = doIndentOf (indentAmount spec + 1) -- 1 for '('
 
     doIndentOf :: Int -> B.Builder -> B.Builder
     doIndentOf n b = B.fromText (T.replicate n " ") <> b
@@ -248,7 +246,9 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
     handleTail :: Maybe Text -> Seq.Seq B.Builder -> Seq.Seq B.Builder
     handleTail Nothing = insertCloseParen
     handleTail (Just t) =
-      (Seq.|> (B.fromString " . " <> B.fromText t <> B.singleton ')'))
+      let txtInd = B.fromText $ T.replicate (indentAmount spec) " "
+          sep = B.fromString " . "
+      in (Seq.|> (txtInd <> sep <> B.fromText t <> B.singleton ')'))
 
     insertCloseParen :: Seq.Seq B.Builder -> Seq.Seq B.Builder
     insertCloseParen s = case Seq.viewr s of
@@ -355,7 +355,9 @@ unwordsS s = case Seq.viewl s of
 -- Indents every line n spaces, and adds a newline to the beginning
 -- used in swung indents
 indentAllS :: Int -> Seq.Seq B.Builder -> B.Builder
-indentAllS n = ("\n" <>) . joinLinesS . fmap (indent n)
+indentAllS n s = if Seq.null s
+                 then ""
+                 else ("\n" <>) $ joinLinesS $ fmap (indent n) s
 
 -- Indents every line but the first by some amount
 -- used in aligned indents
@@ -399,28 +401,29 @@ indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toInterm
         -- the head is the pretty-printed head, with an ambient
         -- indentation of +1 to account for the left paren
         hd = pp (ind+1) h
-        headWidth = sizeSum (sizeOf h)
         indented =
           case i of
             SwingAfter n ->
               let (l, ls) = Seq.splitAt n values
-                  t  = unwordsS (fmap (pp (ind+1)) l)
-                  ts = indentAllS (ind + indentAmount)
-                       (fmap (pp (ind + indentAmount)) ls)
-              in t <> ts
+                  t  = unwordsS (fmap (pp (ind+1+1)) l) -- 1 for (, 1 for ' '
+                  nextInd = ind + indentAmount + 1 -- 1 for (
+                  ts = indentAllS nextInd (fmap (pp nextInd) ls)
+              in B.singleton ' ' <> t <> ts
             Swing ->
-              indentAllS (ind + indentAmount)
-                (fmap (pp (ind + indentAmount)) values)
+              let nextInd = ind + indentAmount + 1 -- 1 for (
+              in indentAllS nextInd (fmap (pp nextInd) values)
             Align ->
-              indentSubsequentS (ind + headWidth + 1)
-                (fmap (pp (ind + headWidth + 1)) values)
+              let headWidth = sizeSum (sizeOf h)
+                  nextInd = ind + headWidth + 1 + 1 -- 1 for (, 1 for ' ' below
+              in B.singleton ' ' <>
+                 indentSubsequentS nextInd (fmap (pp nextInd) values)
         body
           -- if there's nothing here, then we don't have anything to
           -- indent
           | length values == 0 = mempty
           -- if we can't fit the whole next s-expression on the same
           -- line, then we use the indented form
-          | sizeSum sz + ind > maxAmt = B.singleton ' ' <> indented
+          | sizeSum sz + ind > maxAmt = indented
           | otherwise =
             -- otherwise we print the whole thing on one line!
             B.singleton ' ' <> unwordsS (fmap (pp (ind + 1)) values)
