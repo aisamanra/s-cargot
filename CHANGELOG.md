@@ -1,3 +1,11 @@
+v0.1.6.0
+=======
+
+Fixes:
+
+* Some fixes to avoid trailing whitespace in pretty-printing.
+  (Thank you, @kquick!)
+
 v0.1.5.0
 =======
 
