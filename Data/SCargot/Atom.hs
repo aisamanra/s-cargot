@@ -1,9 +1,9 @@
 module Data.SCargot.Atom
   ( -- $intro
-
-    atom
-  , mkAtomParser
-  ) where
+    atom,
+    mkAtomParser,
+  )
+where
 
 import Data.SCargot.Parse (SExprParser, mkParser)
 import Data.SCargot.Repr (SExpr)
@@ -21,20 +21,18 @@ atom = fmap
 mkAtomParser :: [Parser atom] -> SExprParser atom (SExpr atom)
 mkAtomParser = mkParser . choice
 
-{- $intro
-
-This module defines small convenience functions for building an atom
-type from several individual parsers. This is easy to do without these
-functions, but these functions communicate intent more directly:
-
-> data Atom
->   = Ident Text
->   | Num Integer
->
-> myParser :: SExprParser Atom (SExpr Atom)
-> myParser = mkAtomParser
->   [ atom Ident parseR7RSIdent
->   , atom Num   signedDecNumber
->   ]
-
--}
+-- $intro
+--
+-- This module defines small convenience functions for building an atom
+-- type from several individual parsers. This is easy to do without these
+-- functions, but these functions communicate intent more directly:
+--
+-- > data Atom
+-- >   = Ident Text
+-- >   | Num Integer
+-- >
+-- > myParser :: SExprParser Atom (SExpr Atom)
+-- > myParser = mkAtomParser
+-- >   [ atom Ident parseR7RSIdent
+-- >   , atom Num   signedDecNumber
+-- >   ]

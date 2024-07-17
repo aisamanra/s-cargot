@@ -1,44 +1,51 @@
-module Data.SCargot.Common ( -- $intro
-                           -- * Identifier Syntaxes
-                             parseR5RSIdent
-                           , parseR6RSIdent
-                           , parseR7RSIdent
-                           , parseXIDIdentStrict
-                           , parseXIDIdentGeneral
-                           , parseHaskellIdent
-                           , parseHaskellVariable
-                           , parseHaskellConstructor
-                             -- * Numeric Literal Parsers
-                           , signed
-                           , prefixedNumber
-                           , signedPrefixedNumber
-                           , binNumber
-                           , signedBinNumber
-                           , octNumber
-                           , signedOctNumber
-                           , decNumber
-                           , signedDecNumber
-                           , dozNumber
-                           , signedDozNumber
-                           , hexNumber
-                           , signedHexNumber
-                             -- ** Numeric Literals for Arbitrary Bases
-                           , commonLispNumberAnyBase
-                           , gnuM4NumberAnyBase
-                             -- ** Source locations
-                           , Location(..), Located(..), located, dLocation
-                           ) where
+module Data.SCargot.Common
+  ( -- $intro
+    parseR5RSIdent,
+    parseR6RSIdent,
+    parseR7RSIdent,
+    parseXIDIdentStrict,
+    parseXIDIdentGeneral,
+    parseHaskellIdent,
+    parseHaskellVariable,
+    parseHaskellConstructor,
+
+    -- * Numeric Literal Parsers
+    signed,
+    prefixedNumber,
+    signedPrefixedNumber,
+    binNumber,
+    signedBinNumber,
+    octNumber,
+    signedOctNumber,
+    decNumber,
+    signedDecNumber,
+    dozNumber,
+    signedDozNumber,
+    hexNumber,
+    signedHexNumber,
+
+    -- ** Numeric Literals for Arbitrary Bases
+    commonLispNumberAnyBase,
+    gnuM4NumberAnyBase,
+
+    -- ** Source locations
+    Location (..),
+    Located (..),
+    located,
+    dLocation,
+  )
+where
 
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative hiding ((<|>), many)
 #endif
-import           Control.Monad (guard)
-import           Data.Char
-import           Data.Text (Text)
+import Control.Monad (guard)
+import Data.Char
+import Data.Text (Text)
 import qualified Data.Text as T
-import           Text.Parsec
-import           Text.Parsec.Pos  (newPos)
-import           Text.Parsec.Text (Parser)
+import Text.Parsec
+import Text.Parsec.Pos (newPos)
+import Text.Parsec.Text (Parser)
 
 -- | Parse an identifier according to the R5RS Scheme standard. This
 --   will not normalize case, even though the R5RS standard specifies
@@ -49,9 +56,10 @@ import           Text.Parsec.Text (Parser)
 parseR5RSIdent :: Parser Text
 parseR5RSIdent =
   T.pack <$> ((:) <$> initial <*> many subsequent <|> peculiar)
-  where initial    = letter <|> oneOf "!$%&*/:<=>?^_~"
-        subsequent = initial <|> digit <|> oneOf "+-.@"
-        peculiar   = string "+" <|> string "-" <|> string "..."
+  where
+    initial = letter <|> oneOf "!$%&*/:<=>?^_~"
+    subsequent = initial <|> digit <|> oneOf "+-.@"
+    peculiar = string "+" <|> string "-" <|> string "..."
 
 hasCategory :: Char -> [GeneralCategory] -> Bool
 hasCategory c cs = generalCategory c `elem` cs
@@ -64,30 +72,42 @@ hasCategory c cs = generalCategory c `elem` cs
 parseR6RSIdent :: Parser Text
 parseR6RSIdent =
   T.pack <$> ((:) <$> initial <*> many subsequent <|> peculiar)
-  where initial = constituent <|> oneOf "!$%&*/:<=>?^_~" <|> inlineHex
-        constituent = letter
-                   <|> uniClass (\ c -> isLetter c ||
-                                        isSymbol c ||
-                                        hasCategory c
-                                          [ NonSpacingMark
-                                          , LetterNumber
-                                          , OtherNumber
-                                          , DashPunctuation
-                                          , ConnectorPunctuation
-                                          , OtherPunctuation
-                                          , PrivateUse
-                                          ])
-        inlineHex   = (chr . fromIntegral) <$> (string "\\x" *> hexNumber <* char ';')
-        subsequent  = initial <|> digit <|> oneOf "+-.@"
-                   <|> uniClass (\ c -> hasCategory c
-                                          [ DecimalNumber
-                                          , SpacingCombiningMark
-                                          , EnclosingMark
-                                          ])
-        peculiar    = string "+" <|> string "-" <|> string "..." <|>
-                      ((++) <$> string "->" <*> many subsequent)
-        uniClass :: (Char -> Bool) -> Parser Char
-        uniClass sp = satisfy (\ c -> c > '\x7f' && sp c)
+  where
+    initial = constituent <|> oneOf "!$%&*/:<=>?^_~" <|> inlineHex
+    constituent =
+      letter
+        <|> uniClass
+          ( \c ->
+              isLetter c
+                || isSymbol c
+                || hasCategory
+                  c
+                  [ NonSpacingMark,
+                    LetterNumber,
+                    OtherNumber,
+                    DashPunctuation,
+                    ConnectorPunctuation,
+                    OtherPunctuation,
+                    PrivateUse
+                  ]
+          )
+    inlineHex = (chr . fromIntegral) <$> (string "\\x" *> hexNumber <* char ';')
+    subsequent =
+      initial <|> digit <|> oneOf "+-.@"
+        <|> uniClass
+          ( \c ->
+              hasCategory
+                c
+                [ DecimalNumber,
+                  SpacingCombiningMark,
+                  EnclosingMark
+                ]
+          )
+    peculiar =
+      string "+" <|> string "-" <|> string "..."
+        <|> ((++) <$> string "->" <*> many subsequent)
+    uniClass :: (Char -> Bool) -> Parser Char
+    uniClass sp = satisfy (\c -> c > '\x7f' && sp c)
 
 -- | Parse an identifier according to the R7RS Scheme standard. An
 --   R7RS identifier, in addition to a typical identifier format,
@@ -96,100 +116,125 @@ parseR6RSIdent =
 --   not allow escapes to be included in identifiers unless those
 --   identifiers are surrounded by vertical bars.
 parseR7RSIdent :: Parser Text
-parseR7RSIdent =  T.pack <$>
-          (  (:) <$> initial <*> many subsequent
-         <|> char '|' *> many1 symbolElement <* char '|'
-         <|> peculiar
-          )
-  where initial = letter <|> specInit
-        specInit = oneOf "!$%&*/:<=>?^_~"
-        subsequent = initial <|> digit <|> specSubsequent
-        specSubsequent = expSign <|> oneOf ".@"
-        expSign = oneOf "+-"
-        symbolElement =  noneOf "\\|"
-                     <|> hexEscape
-                     <|> mnemEscape
-                     <|> ('|' <$ string "\\|")
-        hexEscape = chr . fromIntegral <$> (string "\\x" *> hexNumber <* char ';')
-        mnemEscape =  '\a' <$ string "\\a"
-                  <|> '\b' <$ string "\\b"
-                  <|> '\t' <$ string "\\t"
-                  <|> '\n' <$ string "\\n"
-                  <|> '\r' <$ string "\\r"
-        peculiar =  (:[]) <$> expSign
-                <|> cons2 <$> expSign <*> signSub <*> many subsequent
-                <|> cons3 <$> expSign
-                          <*> char '.'
-                          <*> dotSub
-                          <*> many subsequent
-                <|> cons2 <$> char '.' <*> dotSub <*> many subsequent
-        dotSub = signSub <|> char '.'
-        signSub = initial <|> expSign <|> char '@'
-        cons2 a b cs   = a : b : cs
-        cons3 a b c ds = a : b : c : ds
+parseR7RSIdent =
+  T.pack
+    <$> ( (:) <$> initial <*> many subsequent
+            <|> char '|' *> many1 symbolElement <* char '|'
+            <|> peculiar
+        )
+  where
+    initial = letter <|> specInit
+    specInit = oneOf "!$%&*/:<=>?^_~"
+    subsequent = initial <|> digit <|> specSubsequent
+    specSubsequent = expSign <|> oneOf ".@"
+    expSign = oneOf "+-"
+    symbolElement =
+      noneOf "\\|"
+        <|> hexEscape
+        <|> mnemEscape
+        <|> ('|' <$ string "\\|")
+    hexEscape = chr . fromIntegral <$> (string "\\x" *> hexNumber <* char ';')
+    mnemEscape =
+      '\a' <$ string "\\a"
+        <|> '\b' <$ string "\\b"
+        <|> '\t' <$ string "\\t"
+        <|> '\n' <$ string "\\n"
+        <|> '\r' <$ string "\\r"
+    peculiar =
+      (: []) <$> expSign
+        <|> cons2 <$> expSign <*> signSub <*> many subsequent
+        <|> cons3 <$> expSign
+          <*> char '.'
+          <*> dotSub
+          <*> many subsequent
+        <|> cons2 <$> char '.' <*> dotSub <*> many subsequent
+    dotSub = signSub <|> char '.'
+    signSub = initial <|> expSign <|> char '@'
+    cons2 a b cs = a : b : cs
+    cons3 a b c ds = a : b : c : ds
 
 -- | Parse a Haskell variable identifier: a sequence of alphanumeric
 --   characters, underscores, or single quote that begins with a
 --   lower-case letter.
 parseHaskellVariable :: Parser Text
 parseHaskellVariable =
-  T.pack <$> ((:) <$> small <*> many (small <|>
-                                      large <|>
-                                      digit' <|>
-                                      char '\'' <|>
-                                      char '_'))
-  where small = satisfy isLower
-        large = satisfy isUpper
-        digit' = satisfy isDigit
+  T.pack
+    <$> ( (:) <$> small
+            <*> many
+              ( small
+                  <|> large
+                  <|> digit'
+                  <|> char '\''
+                  <|> char '_'
+              )
+        )
+  where
+    small = satisfy isLower
+    large = satisfy isUpper
+    digit' = satisfy isDigit
 
 -- | Parse a Haskell constructor: a sequence of alphanumeric
 --   characters, underscores, or single quote that begins with an
 --   upper-case letter.
 parseHaskellConstructor :: Parser Text
 parseHaskellConstructor =
-  T.pack <$> ((:) <$> large <*> many (small <|>
-                                      large <|>
-                                      digit' <|>
-                                      char '\'' <|>
-                                      char '_'))
-  where small = satisfy isLower
-        large = satisfy isUpper
-        digit' = satisfy isDigit
+  T.pack
+    <$> ( (:) <$> large
+            <*> many
+              ( small
+                  <|> large
+                  <|> digit'
+                  <|> char '\''
+                  <|> char '_'
+              )
+        )
+  where
+    small = satisfy isLower
+    large = satisfy isUpper
+    digit' = satisfy isDigit
 
 -- | Parse a Haskell identifer: a sequence of alphanumeric
 --   characters, underscores, or a single quote. This matches both
 --   variable and constructor names.
 parseHaskellIdent :: Parser Text
 parseHaskellIdent =
-  T.pack <$> ((:) <$> (large <|> small)
-                  <*> many (small <|>
-                            large <|>
-                            digit' <|>
-                            char '\'' <|>
-                            char '_'))
-  where small = satisfy isLower
-        large = satisfy isUpper
-        digit' = satisfy isDigit
+  T.pack
+    <$> ( (:) <$> (large <|> small)
+            <*> many
+              ( small
+                  <|> large
+                  <|> digit'
+                  <|> char '\''
+                  <|> char '_'
+              )
+        )
+  where
+    small = satisfy isLower
+    large = satisfy isUpper
+    digit' = satisfy isDigit
 
 -- Ensure that a given character has the given Unicode category
 hasCat :: [GeneralCategory] -> Parser Char
 hasCat cats = satisfy (flip hasCategory cats)
 
 xidStart :: [GeneralCategory]
-xidStart = [ UppercaseLetter
-           , LowercaseLetter
-           , TitlecaseLetter
-           , ModifierLetter
-           , OtherLetter
-           , LetterNumber
-           ]
+xidStart =
+  [ UppercaseLetter,
+    LowercaseLetter,
+    TitlecaseLetter,
+    ModifierLetter,
+    OtherLetter,
+    LetterNumber
+  ]
 
 xidContinue :: [GeneralCategory]
-xidContinue = xidStart ++ [ NonSpacingMark
-                          , SpacingCombiningMark
-                          , DecimalNumber
-                          , ConnectorPunctuation
-                          ]
+xidContinue =
+  xidStart
+    ++ [ NonSpacingMark,
+         SpacingCombiningMark,
+         DecimalNumber,
+         ConnectorPunctuation
+       ]
 
 -- | Parse an identifier of unicode characters of the form
 --   @<XID_Start> <XID_Continue>*@, which corresponds strongly
@@ -199,8 +244,11 @@ xidContinue = xidStart ++ [ NonSpacingMark
 --   identifiers that may include leading underscores, use
 --   'parseXIDIdentGeneral'.
 parseXIDIdentStrict :: Parser Text
-parseXIDIdentStrict = T.pack <$> ((:) <$> hasCat xidStart
-                                  <*> many (hasCat xidContinue))
+parseXIDIdentStrict =
+  T.pack
+    <$> ( (:) <$> hasCat xidStart
+            <*> many (hasCat xidContinue)
+        )
 
 -- | Parse an identifier of unicode characters of the form
 --   @(<XID_Start> | '_') <XID_Continue>*@, which corresponds
@@ -212,27 +260,31 @@ parseXIDIdentStrict = T.pack <$> ((:) <$> hasCat xidStart
 --   <http://unicode.org/reports/tr31/ Unicode Identifier and
 --   Pattern Syntax standard>.
 parseXIDIdentGeneral :: Parser Text
-parseXIDIdentGeneral = T.pack <$> ((:) <$> (hasCat xidStart <|> char '_')
-                                       <*> many (hasCat xidContinue))
+parseXIDIdentGeneral =
+  T.pack
+    <$> ( (:) <$> (hasCat xidStart <|> char '_')
+            <*> many (hasCat xidContinue)
+        )
 
 -- | A helper function for defining parsers for arbitrary-base integers.
 --   The first argument will be the base, and the second will be the
 --   parser for the individual digits.
 number :: Integer -> Parser Char -> Parser Integer
 number base digits = foldl go 0 <$> many1 digits
-  where go x d = base * x + toInteger (value d)
-        value c
-          | c >= 'a' && c <= 'z' = 0xa + (fromEnum c - fromEnum 'a')
-          | c >= 'A' && c <= 'Z' = 0xa + (fromEnum c - fromEnum 'A')
-          | c >= '0' && c <= '9' = fromEnum c - fromEnum '0'
-          | c == '\x218a' = 0xa
-          | c == '\x218b' = 0xb
-          | otherwise = error ("Unknown letter in number: " ++ show c)
+  where
+    go x d = base * x + toInteger (value d)
+    value c
+      | c >= 'a' && c <= 'z' = 0xa + (fromEnum c - fromEnum 'a')
+      | c >= 'A' && c <= 'Z' = 0xa + (fromEnum c - fromEnum 'A')
+      | c >= '0' && c <= '9' = fromEnum c - fromEnum '0'
+      | c == '\x218a' = 0xa
+      | c == '\x218b' = 0xb
+      | otherwise = error ("Unknown letter in number: " ++ show c)
 
 digitsFor :: Int -> [Char]
 digitsFor n
-  | n <= 10   = take n ['0'..'9']
-  | n <= 36   = take (n-10) ['A'..'Z'] ++ take (n-10) ['a'..'z'] ++ ['0'..'9']
+  | n <= 10 = take n ['0' .. '9']
+  | n <= 36 = take (n -10) ['A' .. 'Z'] ++ take (n -10) ['a' .. 'z'] ++ ['0' .. '9']
   | otherwise = error ("Invalid base for parser: " ++ show n)
 
 anyBase :: Integer -> Parser Integer
@@ -262,7 +314,8 @@ gnuM4NumberAnyBase = do
   signed (anyBase n)
 
 sign :: Num a => Parser (a -> a)
-sign =  (pure id     <* char '+')
+sign =
+  (pure id <* char '+')
     <|> (pure negate <* char '-')
     <|> pure id
 
@@ -283,11 +336,12 @@ signedPrefixedNumber = signed prefixedNumber
 --   number (as well as the upper-case versions of the same.) If the
 --   base is omitted entirely, then it is treated as a decimal number.
 prefixedNumber :: Parser Integer
-prefixedNumber =  (string "0x" <|> string "0X") *> hexNumber
-              <|> (string "0o" <|> string "0O") *> octNumber
-              <|> (string "0z" <|> string "0Z") *> dozNumber
-              <|> (string "0b" <|> string "0B") *> binNumber
-              <|> decNumber
+prefixedNumber =
+  (string "0x" <|> string "0X") *> hexNumber
+    <|> (string "0o" <|> string "0O") *> octNumber
+    <|> (string "0z" <|> string "0Z") *> dozNumber
+    <|> (string "0b" <|> string "0B") *> binNumber
+    <|> decNumber
 
 -- | A parser for non-signed binary numbers
 binNumber :: Parser Integer
@@ -335,7 +389,6 @@ hexNumber = number 16 hexDigit
 signedHexNumber :: Parser Integer
 signedHexNumber = ($) <$> sign <*> hexNumber
 
-
 -- |
 data Location = Span !SourcePos !SourcePos
   deriving (Eq, Ord, Show)
@@ -357,13 +410,12 @@ located parser = do
 -- | A default location value
 dLocation :: Location
 dLocation = Span dPos dPos
-  where dPos = newPos "" 0 0
+  where
+    dPos = newPos "" 0 0
 
-{- $intro
-
-This module contains a selection of parsers for different kinds of
-identifiers and literals, from which more elaborate parsers can be
-assembled. These can afford the user a quick way of building parsers
-for different atom types.
-
--}
+-- $intro
+--
+-- This module contains a selection of parsers for different kinds of
+-- identifiers and literals, from which more elaborate parsers can be
+-- assembled. These can afford the user a quick way of building parsers
+-- for different atom types.

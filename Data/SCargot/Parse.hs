@@ -1,50 +1,54 @@
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Data.SCargot.Parse
   ( -- * Parsing
-    decode
-  , decodeOne
+    decode,
+    decodeOne,
+
     -- * Parsing Control
-  , SExprParser
-  , Reader
-  , Comment
-  , mkParser
-  , setCarrier
-  , addReader
-  , setComment
+    SExprParser,
+    Reader,
+    Comment,
+    mkParser,
+    setCarrier,
+    addReader,
+    setComment,
+
     -- * Specific SExprParser Conversions
-  , asRich
-  , asWellFormed
-  , withQuote
-  ) where
+    asRich,
+    asWellFormed,
+    withQuote,
+  )
+where
 
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>), (<*), pure)
 #endif
-import           Control.Monad ((>=>))
-import           Data.Map.Strict (Map)
+import Control.Monad ((>=>))
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import           Data.Text (Text)
-import           Data.String (IsString)
-import           Text.Parsec ( (<|>)
-                             , (<?>)
-                             , char
-                             , eof
-                             , lookAhead
-                             , many1
-                             , runParser
-                             , skipMany
-                             )
-import           Text.Parsec.Char (anyChar, space)
-import           Text.Parsec.Text (Parser)
-
-import           Data.SCargot.Repr ( SExpr(..)
-                                   , RichSExpr
-                                   , WellFormedSExpr
-                                   , toRich
-                                   , toWellFormed
-                                   )
+import Data.SCargot.Repr
+  ( RichSExpr,
+    SExpr (..),
+    WellFormedSExpr,
+    toRich,
+    toWellFormed,
+  )
+import Data.String (IsString)
+import Data.Text (Text)
+import Text.Parsec
+  ( char,
+    eof,
+    lookAhead,
+    many1,
+    runParser,
+    skipMany,
+    (<?>),
+    (<|>),
+  )
+import Text.Parsec.Char (anyChar, space)
+import Text.Parsec.Text (Parser)
 
 type ReaderMacroMap atom = Map Char (Reader atom)
 
@@ -65,10 +69,10 @@ type Comment = Parser ()
 --   and the @carrier@ parameter corresponds to the parsed S-Expression
 --   structure.
 data SExprParser atom carrier = SExprParser
-  { sesPAtom   :: Parser atom
-  , readerMap  :: ReaderMacroMap atom
-  , comment    :: Maybe Comment
-  , postparse  :: SExpr atom -> Either String carrier
+  { sesPAtom :: Parser atom,
+    readerMap :: ReaderMacroMap atom,
+    comment :: Maybe Comment,
+    postparse :: SExpr atom -> Either String carrier
   }
 
 -- | Create a basic 'SExprParser' when given a parser
@@ -79,12 +83,13 @@ data SExprParser atom carrier = SExprParser
 --   >>> decode parser "(ele phant)"
 --   Right [SCons (SAtom "ele") (SCons (SAtom "phant") SNil)]
 mkParser :: Parser atom -> SExprParser atom (SExpr atom)
-mkParser parser = SExprParser
-  { sesPAtom   = parser
-  , readerMap  = M.empty
-  , comment    = Nothing
-  , postparse  = return
-  }
+mkParser parser =
+  SExprParser
+    { sesPAtom = parser,
+      readerMap = M.empty,
+      comment = Nothing,
+      postparse = return
+    }
 
 -- | Modify the carrier type for a 'SExprParser'. This is
 --   used internally to convert between various 'SExpr' representations,
@@ -97,7 +102,7 @@ mkParser parser = SExprParser
 -- >>> decode parser "(ele phant)"
 -- Right [RSlist [RSAtom "ele",RSAtom "phant"]]
 setCarrier :: (b -> Either String c) -> SExprParser a b -> SExprParser a c
-setCarrier f spec = spec { postparse = postparse spec >=> f }
+setCarrier f spec = spec {postparse = postparse spec >=> f}
 
 -- | Convert the final output representation from the 'SExpr' type
 --   to the 'RichSExpr' type.
@@ -131,10 +136,11 @@ asWellFormed = setCarrier toWellFormed
 -- >>> let parser = addReader '[' vecReader (mkParser (many1 alphaNum))
 -- >>> decode parser "(an [ele phant])"
 -- Right [SCons (SAtom "an") (SCons (SCons (SAtom "ele") (SCons (SAtom "phant") SNil)) SNil)]
-
 addReader :: Char -> Reader a -> SExprParser a c -> SExprParser a c
-addReader c reader spec = spec
-  { readerMap = M.insert c reader (readerMap spec) }
+addReader c reader spec =
+  spec
+    { readerMap = M.insert c reader (readerMap spec)
+    }
 
 -- | Add the ability to ignore some kind of comment. This gets
 --   factored into whitespace parsing, and it's very important that
@@ -147,9 +153,8 @@ addReader c reader spec = spec
 -- >>> let parser = setComment comment (mkParser (many1 alphaNum))
 -- >>> decode parser "(ele //a comment\n  phant)"
 -- Right [SCons (SAtom "ele") (SCons (SAtom "phant") SNil)]
-
 setComment :: Comment -> SExprParser a c -> SExprParser a c
-setComment c spec = spec { comment = Just (c <?> "comment") }
+setComment c spec = spec {comment = Just (c <?> "comment")}
 
 -- | Add the ability to understand a quoted S-Expression.
 --   Many Lisps use @'sexpr@ as sugar for @(quote sexpr)@. This
@@ -162,13 +167,14 @@ setComment c spec = spec { comment = Just (c <?> "comment") }
 -- Right [SCons (SAtom "quote") (SCons (SAtom "foo") SNil)]
 withQuote :: IsString t => SExprParser t (SExpr t) -> SExprParser t (SExpr t)
 withQuote = addReader '\'' (fmap go)
-  where go s  = SCons "quote" (SCons s SNil)
+  where
+    go s = SCons "quote" (SCons s SNil)
 
 peekChar :: Parser (Maybe Char)
 peekChar = Just <$> lookAhead anyChar <|> pure Nothing
 
 parseGenericSExpr ::
-  Parser atom  -> ReaderMacroMap atom -> Parser () -> Parser (SExpr atom)
+  Parser atom -> ReaderMacroMap atom -> Parser () -> Parser (SExpr atom)
 parseGenericSExpr atom reader skip = do
   let sExpr = parseGenericSExpr atom reader skip <?> "s-expr"
   skip
@@ -185,9 +191,9 @@ parseList :: Parser (SExpr atom) -> Parser () -> Parser (SExpr atom)
 parseList sExpr skip = do
   i <- peekChar
   case i of
-    Nothing  -> fail "Unexpected end of input"
+    Nothing -> fail "Unexpected end of input"
     Just ')' -> char ')' >> return SNil
-    _        -> do
+    _ -> do
       car <- sExpr
       skip
       c <- peekChar
@@ -210,14 +216,15 @@ parseList sExpr skip = do
 -- | Given a CommentMap, create the corresponding parser to
 --   skip those comments (if they exist).
 buildSkip :: Maybe (Parser ()) -> Parser ()
-buildSkip Nothing  = skipMany space
+buildSkip Nothing = skipMany space
 buildSkip (Just c) = alternate
-  where alternate = skipMany space >> ((c >> alternate) <|> return ())
+  where
+    alternate = skipMany space >> ((c >> alternate) <|> return ())
 
 doParse :: Parser a -> Text -> Either String a
 doParse p t = case runParser p () "" t of
   Left err -> Left (show err)
-  Right x  -> Right x
+  Right x -> Right x
 
 -- | Decode a single S-expression. If any trailing input is left after
 --   the S-expression (ignoring comments or whitespace) then this
@@ -225,10 +232,12 @@ doParse p t = case runParser p () "" t of
 --   all the S-expressions found at the top level.
 decodeOne :: SExprParser atom carrier -> Text -> Either String carrier
 decodeOne spec = doParse (parser <* eof) >=> (postparse spec)
-  where parser = parseGenericSExpr
-                   (sesPAtom spec)
-                   (readerMap spec)
-                   (buildSkip (comment spec))
+  where
+    parser =
+      parseGenericSExpr
+        (sesPAtom spec)
+        (readerMap spec)
+        (buildSkip (comment spec))
 
 -- | Decode several S-expressions according to a given 'SExprParser'. This
 --   will return a list of every S-expression that appears at the top-level
@@ -236,10 +245,12 @@ decodeOne spec = doParse (parser <* eof) >=> (postparse spec)
 decode :: SExprParser atom carrier -> Text -> Either String [carrier]
 decode spec =
   doParse (many1 parser <* eof) >=> mapM (postparse spec)
-    where parser = parseGenericSExpr
-                     (sesPAtom spec)
-                     (readerMap spec)
-                     (buildSkip (comment spec))
+  where
+    parser =
+      parseGenericSExpr
+        (sesPAtom spec)
+        (readerMap spec)
+        (buildSkip (comment spec))
 
 {-
 -- | Encode (without newlines) a single S-expression.
