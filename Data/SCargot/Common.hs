@@ -407,6 +407,9 @@ data Located a = At !Location a
 instance HasLocation (Located a) where
   getLocation (At loc _) = loc
 
+instance HasLocation () where
+  getLocation () = dLocation
+
 -- | Adds a source span to a parser.
 located :: Parser a -> Parser (Located a)
 located parser = do
