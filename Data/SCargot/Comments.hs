@@ -4,43 +4,50 @@ module Data.SCargot.Comments
   ( -- $intro
 
     -- * Lisp-Style Syntax
-
     -- $lisp
-    withLispComments
+    withLispComments,
+
     -- * Other Existing Comment Syntaxes
+
     -- ** Scripting Language Syntax
     -- $script
-  , withOctothorpeComments
+    withOctothorpeComments,
+
     -- ** Prolog- or Matlab-Style Syntax
-  , withPercentComments
-  , withPercentBlockComments
+    withPercentComments,
+    withPercentBlockComments,
+
     -- ** C-Style Syntax
     -- $clike
-  , withCLikeLineComments
-  , withCLikeBlockComments
-  , withCLikeComments
+    withCLikeLineComments,
+    withCLikeBlockComments,
+    withCLikeComments,
+
     -- ** Haskell-Style Syntax
     -- $haskell
-  , withHaskellLineComments
-  , withHaskellBlockComments
-  , withHaskellComments
+    withHaskellLineComments,
+    withHaskellBlockComments,
+    withHaskellComments,
+
     -- * Comment Syntax Helper Functions
-  , lineComment
-  , simpleBlockComment
-  ) where
+    lineComment,
+    simpleBlockComment,
+  )
+where
 
-import           Text.Parsec ( (<|>)
-                             , anyChar
-                             , manyTill
-                             , noneOf
-                             , skipMany
-                             , string
-                             )
-
-import            Data.SCargot.Parse ( Comment
-                                     , SExprParser
-                                     , setComment
-                                     )
+import Data.SCargot.Parse
+  ( Comment,
+    SExprParser,
+    setComment,
+  )
+import Text.Parsec
+  ( anyChar,
+    manyTill,
+    noneOf,
+    skipMany,
+    string,
+    (<|>),
+  )
 
 -- | Given a string, produce a comment parser that matches that
 --   initial string and ignores everything until the end of the
@@ -68,9 +75,9 @@ lineComment s = string s >> skipMany (noneOf "\n") >> return ()
 -- is a complete comment.
 simpleBlockComment :: String -> String -> Comment
 simpleBlockComment begin end =
-  string begin >>
-  manyTill anyChar (string end) >>
-  return ()
+  string begin
+    >> manyTill anyChar (string end)
+    >> return ()
 
 -- | Lisp-style line-oriented comments start with @;@ and last
 --   until the end of the line. This is usually the comment
@@ -92,8 +99,11 @@ withCLikeBlockComments = setComment (simpleBlockComment "/*" "*/")
 --   former starting with @//@ and the latter contained within
 --   @//* ... *//@.
 withCLikeComments :: SExprParser t a -> SExprParser t a
-withCLikeComments = setComment (lineComment "//" <|>
-                                simpleBlockComment "/*" "*/")
+withCLikeComments =
+  setComment
+    ( lineComment "//"
+        <|> simpleBlockComment "/*" "*/"
+    )
 
 -- | Haskell line-oriented comments start with @--@ and last
 --   until the end of the line.
@@ -108,8 +118,11 @@ withHaskellBlockComments = setComment (simpleBlockComment "{-" "-}")
 -- | Haskell comments include both the line-oriented @--@ comments
 --   and the block-oriented @{- ... -}@ comments
 withHaskellComments :: SExprParser t a -> SExprParser t a
-withHaskellComments = setComment (lineComment "--" <|>
-                                  simpleBlockComment "{-" "-}")
+withHaskellComments =
+  setComment
+    ( lineComment "--"
+        <|> simpleBlockComment "{-" "-}"
+    )
 
 -- | Many scripting and shell languages use these, which begin with
 --   @#@ and last until the end of the line.
@@ -125,57 +138,51 @@ withPercentComments = setComment (lineComment "%")
 withPercentBlockComments :: SExprParser t a -> SExprParser t a
 withPercentBlockComments = setComment (simpleBlockComment "%{" "%}")
 
+-- $intro
+--
+-- By default a 'SExprParser' will not understand any kind of comment
+-- syntax. Most varieties of s-expression will, however, want some kind
+-- of commenting capability, so the below functions will produce a new
+-- 'SExprParser' which understands various kinds of comment syntaxes.
+--
+-- For example:
+--
+-- > mySpec :: SExprParser Text (SExpr Text)
+-- > mySpec = asWellFormed $ mkParser (pack <$> many1 alphaNum)
+-- >
+-- > myLispySpec :: SExprParser Text (SExpr Text)
+-- > myLispySpec = withLispComments mySpec
+-- >
+-- > myCLikeSpec :: SExprParser Text (SExpr Text)
+-- > myCLikeSpec = withCLikeComment mySpec
+--
+-- We can then use these to parse s-expressions with different kinds of
+-- comment syntaxes:
+--
+-- >>> decode mySpec "(foo ; a lisp comment\n  bar)\n"
+-- Left "(line 1, column 6):\nunexpected \";\"\nexpecting space or atom"
+-- >>> decode myLispySpec "(foo ; a lisp comment\n  bar)\n"
+-- Right [WFSList [WFSAtom "foo", WFSAtom "bar"]]
+-- >>> decode mySpec "(foo /* a c-like\n   comment */ bar)\n"
+-- Left "(line 1, column 6):\nunexpected \"/\"\nexpecting space or atom"
+-- >>> decode myCLikeSpec "(foo /* a c-like\n   comment */ bar)\n"
+-- Right [WFSList [WFSAtom "foo", WFSAtom "bar"]]
 
-{- $intro
+-- $lisp
+-- > (one   ; a comment
+-- >   two  ; another one
+-- >   three)
 
-By default a 'SExprParser' will not understand any kind of comment
-syntax. Most varieties of s-expression will, however, want some kind
-of commenting capability, so the below functions will produce a new
-'SExprParser' which understands various kinds of comment syntaxes.
+-- $script
+-- > (one   # a comment
+-- >   two  # another one
+-- >   three)
 
-For example:
-
-> mySpec :: SExprParser Text (SExpr Text)
-> mySpec = asWellFormed $ mkParser (pack <$> many1 alphaNum)
->
-> myLispySpec :: SExprParser Text (SExpr Text)
-> myLispySpec = withLispComments mySpec
->
-> myCLikeSpec :: SExprParser Text (SExpr Text)
-> myCLikeSpec = withCLikeComment mySpec
-
-We can then use these to parse s-expressions with different kinds of
-comment syntaxes:
-
->>> decode mySpec "(foo ; a lisp comment\n  bar)\n"
-Left "(line 1, column 6):\nunexpected \";\"\nexpecting space or atom"
->>> decode myLispySpec "(foo ; a lisp comment\n  bar)\n"
-Right [WFSList [WFSAtom "foo", WFSAtom "bar"]]
->>> decode mySpec "(foo /* a c-like\n   comment */ bar)\n"
-Left "(line 1, column 6):\nunexpected \"/\"\nexpecting space or atom"
->>> decode myCLikeSpec "(foo /* a c-like\n   comment */ bar)\n"
-Right [WFSList [WFSAtom "foo", WFSAtom "bar"]]
-
--}
-
-{- $lisp
-> (one   ; a comment
->   two  ; another one
->   three)
--}
-
-{- $script
-> (one   # a comment
->   two  # another one
->   three)
--}
-
-{- $clike
-> (one // a comment
->   two /* another
->          one */
->   three)
--}
+-- $clike
+-- > (one // a comment
+-- >   two /* another
+-- >          one */
+-- >   three)
 
 -- $haskell
 -- > (one -- a comment

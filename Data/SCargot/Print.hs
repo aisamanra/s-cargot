@@ -1,38 +1,39 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.SCargot.Print
-         ( -- * Pretty-Printing
-           encodeOne
-         , encode
-         , encodeOneLazy
-         , encodeLazy
-           -- * Pretty-Printing Control
-         , SExprPrinter
-         , Indent(..)
-         , setFromCarrier
-         , setMaxWidth
-         , removeMaxWidth
-         , setIndentAmount
-         , setIndentStrategy
-           -- * Default Printing Strategies
-         , basicPrint
-         , flatPrint
-         , unconstrainedPrint
-         ) where
+  ( -- * Pretty-Printing
+    encodeOne,
+    encode,
+    encodeOneLazy,
+    encodeLazy,
+
+    -- * Pretty-Printing Control
+    SExprPrinter,
+    Indent (..),
+    setFromCarrier,
+    setMaxWidth,
+    removeMaxWidth,
+    setIndentAmount,
+    setIndentStrategy,
+
+    -- * Default Printing Strategies
+    basicPrint,
+    flatPrint,
+    unconstrainedPrint,
+  )
+where
 
 import qualified Data.Foldable as F
-import           Data.Monoid ((<>))
+import Data.Monoid ((<>))
+import Data.SCargot.Repr
 import qualified Data.Sequence as Seq
-import           Data.Text (Text)
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as B
 import qualified Data.Traversable as T
-
-import           Data.SCargot.Repr
-
 
 -- | The 'Indent' type is used to determine how to indent subsequent
 --   s-expressions in a list, after printing the head of the list.  This only
@@ -40,80 +41,82 @@ import           Data.SCargot.Repr
 --   'SExprPrinter.maxWidth'; a sub-maxWidth printing will not add newlines or
 --   indentation.
 data Indent
-  = Swing -- ^ A 'Swing' indent will indent subsequent exprs some fixed
-          --   amount more than the current line.
-          --
-          --   > (foo
-          --   >   bar
-          --   >   baz
-          --   >   quux)
-          --
-          -- Any 'SExprPrinter.indentAmount' applies relative to the entry at the
-          -- head of the list; in the above example, the indentAmount is 1.
-  | SwingAfter Int -- ^ A 'SwingAfter' @n@ indent will try to print the
-                   --   first @n@ expressions after the head on the same
-                   --   line as the head, and all after will be swung.
-                   --   'SwingAfter' @0@ is equivalent to 'Swing'.
-                   --
-                   --   > (foo bar
-                   --   >   baz
-                   --   >   quux)
-                   --
-                   -- The 'SExprPrinter.indentAmount' is handled in the same way
-                   -- as for the 'Swing' setting.
-  | Align -- ^ An 'Align' indent will print the first expression after the head
-          -- on the same line, and subsequent expressions will be aligned with
-          -- that one.  Note that this ignores any 'SExprPrinter.indentAmount'
-          -- specified for the printer.
-          --
-          --   > (foo bar
-          --   >      baz
-          --   >      quux)
-    deriving (Eq, Show)
-
+  = -- | A 'Swing' indent will indent subsequent exprs some fixed
+    --   amount more than the current line.
+    --
+    --   > (foo
+    --   >   bar
+    --   >   baz
+    --   >   quux)
+    --
+    -- Any 'SExprPrinter.indentAmount' applies relative to the entry at the
+    -- head of the list; in the above example, the indentAmount is 1.
+    Swing
+  | -- | A 'SwingAfter' @n@ indent will try to print the
+    --   first @n@ expressions after the head on the same
+    --   line as the head, and all after will be swung.
+    --   'SwingAfter' @0@ is equivalent to 'Swing'.
+    --
+    --   > (foo bar
+    --   >   baz
+    --   >   quux)
+    --
+    -- The 'SExprPrinter.indentAmount' is handled in the same way
+    -- as for the 'Swing' setting.
+    SwingAfter Int
+  | -- | An 'Align' indent will print the first expression after the head
+    -- on the same line, and subsequent expressions will be aligned with
+    -- that one.  Note that this ignores any 'SExprPrinter.indentAmount'
+    -- specified for the printer.
+    --
+    --   > (foo bar
+    --   >      baz
+    --   >      quux)
+    Align
+  deriving (Eq, Show)
 
 -- | A 'SExprPrinter' value describes how to print a given value as an
 --   s-expression. The @carrier@ type parameter indicates the value
 --   that will be printed, and the @atom@ parameter indicates the type
 --   that will represent tokens in an s-expression structure.
 data SExprPrinter atom carrier = SExprPrinter
-  { atomPrinter  :: atom -> Text
-      -- ^ How to serialize a given atom to 'Text'.
-  , fromCarrier  :: carrier -> SExpr atom
-      -- ^ How to turn a carrier type back into a 'Sexpr'.
-  , swingIndent  :: SExpr atom -> Indent
-      -- ^ How to indent subsequent expressions, as determined by
-      --   the head of the list.
-  , indentAmount :: Int
-      -- ^ How much to indent after a swung indentation, relative to the *head*
-      -- element.
-  , maxWidth     :: Maybe Int
-      -- ^ The maximum width (if any) If this is 'None' then the resulting
-      --   s-expression might be printed on one line (if
-      --   'SExprPrinter.indentPrint' is 'False') and might be pretty-printed in
-      --   the most naive way possible (if 'SExprPrinter.indentPrint' is 'True').
-  , indentPrint :: Bool
-      -- ^ Whether to indent or not.
+  { -- | How to serialize a given atom to 'Text'.
+    atomPrinter :: atom -> Text,
+    -- | How to turn a carrier type back into a 'Sexpr'.
+    fromCarrier :: carrier -> SExpr atom,
+    -- | How to indent subsequent expressions, as determined by
+    --   the head of the list.
+    swingIndent :: SExpr atom -> Indent,
+    -- | How much to indent after a swung indentation, relative to the *head*
+    -- element.
+    indentAmount :: Int,
+    -- | The maximum width (if any) If this is 'None' then the resulting
+    --   s-expression might be printed on one line (if
+    --   'SExprPrinter.indentPrint' is 'False') and might be pretty-printed in
+    --   the most naive way possible (if 'SExprPrinter.indentPrint' is 'True').
+    maxWidth :: Maybe Int,
+    -- | Whether to indent or not.
+    indentPrint :: Bool
   }
-
 
 -- | A default 'SExprPrinter' struct that will always print a 'SExpr'
 --   as a single line.
 flatPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
-flatPrint = (\p -> p { indentPrint = False}) . removeMaxWidth . basicPrint
+flatPrint = (\p -> p {indentPrint = False}) . removeMaxWidth . basicPrint
 
 -- | A default 'SExprPrinter' struct that will always swing subsequent
 --   expressions onto later lines if they're too long, indenting them
 --   by two spaces, and uses a soft maximum width of 80 characters
 basicPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
-basicPrint printer = SExprPrinter
-  { atomPrinter  = printer
-  , fromCarrier  = id
-  , swingIndent  = const Swing
-  , indentAmount = 2
-  , maxWidth     = Just 80
-  , indentPrint  = True
-  }
+basicPrint printer =
+  SExprPrinter
+    { atomPrinter = printer,
+      fromCarrier = id,
+      swingIndent = const Swing,
+      indentAmount = 2,
+      maxWidth = Just 80,
+      indentPrint = True
+    }
 
 -- | A default 'SExprPrinter' struct that will always swing subsequent
 -- expressions onto later lines if they're too long, indenting them by
@@ -125,24 +128,25 @@ unconstrainedPrint :: (atom -> Text) -> SExprPrinter atom (SExpr atom)
 unconstrainedPrint = removeMaxWidth . basicPrint
 
 data Size = Size
-  { sizeSum :: !Int
-  , sizeMax :: !Int
-  } deriving (Show)
+  { sizeSum :: !Int,
+    sizeMax :: !Int
+  }
+  deriving (Show)
 
 -- | This is an intermediate representation which is like (but not
 -- identical to) a RichSExpr representation. In particular, it has a
 -- special case for empty lists, and it also keeps a single piece of
 -- indent information around for each list
 data Intermediate
-  = IAtom Text
-  -- ^ An atom, already serialized
-  | IList Indent Size Intermediate (Seq.Seq Intermediate) (Maybe Text)
-  -- ^ A (possibly-improper) list, with the intended indentation
-  -- strategy, the head of the list, the main set of elements, and the
-  -- final improper element (if it exists)
-  | IEmpty
-  -- ^ An empty list
-    deriving Show
+  = -- | An atom, already serialized
+    IAtom Text
+  | -- | A (possibly-improper) list, with the intended indentation
+    -- strategy, the head of the list, the main set of elements, and the
+    -- final improper element (if it exists)
+    IList Indent Size Intermediate (Seq.Seq Intermediate) (Maybe Text)
+  | -- | An empty list
+    IEmpty
+  deriving (Show)
 
 sizeOf :: Intermediate -> Size
 sizeOf IEmpty = Size 2 2
@@ -150,32 +154,37 @@ sizeOf (IAtom t) = Size len len where len = T.length t
 sizeOf (IList _ (Size n m) _ _ _) = Size (n + 2) (m + 2)
 
 concatSize :: Size -> Size -> Size
-concatSize l r = Size
-  { sizeSum = sizeSum l + 1 + sizeSum r  -- 1 for the ' ' between elements
-  , sizeMax = sizeMax l `max` sizeMax r
-  }
+concatSize l r =
+  Size
+    { sizeSum = sizeSum l + 1 + sizeSum r, -- 1 for the ' ' between elements
+      sizeMax = sizeMax l `max` sizeMax r
+    }
 
 toIntermediate :: SExprPrinter a (SExpr a) -> SExpr a -> Intermediate
 toIntermediate
-  SExprPrinter { atomPrinter = printAtom
-               , swingIndent = swing
-               } = headOf
-  where
-    headOf (SAtom a)    = IAtom (printAtom a)
-    headOf SNil         = IEmpty
-    headOf (SCons x xs) =
-      gather (swing x) hd Seq.empty xs (sizeOf hd) where hd = headOf x
-    gather sw hd rs SNil sz =
-      IList sw sz hd rs Nothing
-    gather sw hd rs (SAtom a) sz =
-      IList sw (sz `concatSize` aSize) hd rs (Just aStr)
-        where aSize = Size aLen aLen
-              aLen = T.length aStr + 2 -- 2 for the ". " between the pair
-              aStr = printAtom a
-    gather sw hd rs (SCons x xs) sz =
-      gather sw hd (rs Seq.|> x') xs (sz `concatSize` sizeOf x')
-        where x' = headOf x
-
+  SExprPrinter
+    { atomPrinter = printAtom,
+      swingIndent = swing
+    } = headOf
+    where
+      headOf (SAtom a) = IAtom (printAtom a)
+      headOf SNil = IEmpty
+      headOf (SCons x xs) =
+        gather (swing x) hd Seq.empty xs (sizeOf hd)
+        where
+          hd = headOf x
+      gather sw hd rs SNil sz =
+        IList sw sz hd rs Nothing
+      gather sw hd rs (SAtom a) sz =
+        IList sw (sz `concatSize` aSize) hd rs (Just aStr)
+        where
+          aSize = Size aLen aLen
+          aLen = T.length aStr + 2 -- 2 for the ". " between the pair
+          aStr = printAtom a
+      gather sw hd rs (SCons x xs) sz =
+        gather sw hd (rs Seq.|> x') xs (sz `concatSize` sizeOf x')
+        where
+          x' = headOf x
 
 unboundIndentPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> TL.Text
 unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
@@ -184,7 +193,7 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
 
     go :: Intermediate -> Seq.Seq B.Builder
     go (IAtom t) = Seq.singleton (B.fromText t)
-    go IEmpty    = Seq.singleton (B.fromString "()")
+    go IEmpty = Seq.singleton (B.fromString "()")
     -- this case should never be called with an empty argument to
     -- @values@, as that should have been translated to @IEmpty@
     -- instead.
@@ -194,21 +203,18 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
       -- it take the whole line
       | Just strings <- T.traverse ppBasic (initial Seq.<| values) =
         Seq.singleton (B.singleton '(' <> buildUnwords strings <> pTail rest)
-
       -- it's not "flat", so we might want to swing after the first thing
       | Swing <- iv =
-          -- if this match fails, then it means we've failed to
-          -- convert to an Intermediate correctly!
-          let butLast = insertParen (go initial) <> fmap doIndent (F.foldMap go values)
-          in handleTail rest butLast
-
+        -- if this match fails, then it means we've failed to
+        -- convert to an Intermediate correctly!
+        let butLast = insertParen (go initial) <> fmap doIndent (F.foldMap go values)
+         in handleTail rest butLast
       -- ...or after several things
       | SwingAfter n <- iv =
-          let (hs, xs) = Seq.splitAt n (initial Seq.<| values)
-              hd = B.singleton '(' <> buildUnwords (F.foldMap go hs)
-              butLast = hd Seq.<| fmap doIndent (F.foldMap go xs)
-          in handleTail rest butLast
-
+        let (hs, xs) = Seq.splitAt n (initial Seq.<| values)
+            hd = B.singleton '(' <> buildUnwords (F.foldMap go hs)
+            butLast = hd Seq.<| fmap doIndent (F.foldMap go xs)
+         in handleTail rest butLast
       -- the 'align' choice is clunkier because we need to know how
       -- deep to indent, so we have to force the first builder to grab its size
       | otherwise =
@@ -220,21 +226,20 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
             -- I to quarrel with the wild fruits upon the Tree of
             -- Life?)
             len = 2 + F.maximum (fmap (TL.length . B.toLazyText) (go initial))
-        in case Seq.viewl values of
-          -- if there's nothing after the head of the expression, then
-          -- we simply close it
-          Seq.EmptyL -> insertParen (insertCloseParen (go initial))
-          -- otherwise, we put the first two things on the same line
-          -- with spaces and everything else gets indended the
-          -- forementioned length
-          y Seq.:< ys ->
-            let hd = B.singleton '(' <> buildUnwords (F.foldMap go (Seq.fromList [initial, y]))
-                butLast = hd Seq.<| fmap (doIndentOf (fromIntegral len)) (F.foldMap go ys)
-            in handleTail rest butLast
+         in case Seq.viewl values of
+              -- if there's nothing after the head of the expression, then
+              -- we simply close it
+              Seq.EmptyL -> insertParen (insertCloseParen (go initial))
+              -- otherwise, we put the first two things on the same line
+              -- with spaces and everything else gets indended the
+              -- forementioned length
+              y Seq.:< ys ->
+                let hd = B.singleton '(' <> buildUnwords (F.foldMap go (Seq.fromList [initial, y]))
+                    butLast = hd Seq.<| fmap (doIndentOf (fromIntegral len)) (F.foldMap go ys)
+                 in handleTail rest butLast
 
     doIndent :: B.Builder -> B.Builder
     doIndent = doIndentOf (indentAmount spec + 1) -- 1 for '('
-
     doIndentOf :: Int -> B.Builder -> B.Builder
     doIndentOf n b = B.fromText (T.replicate n " ") <> b
 
@@ -248,7 +253,7 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
     handleTail (Just t) =
       let txtInd = B.fromText $ T.replicate (indentAmount spec) " "
           sep = B.fromString " . "
-      in (Seq.|> (txtInd <> sep <> B.fromText t <> B.singleton ')'))
+       in (Seq.|> (txtInd <> sep <> B.fromText t <> B.singleton ')'))
 
     insertCloseParen :: Seq.Seq B.Builder -> Seq.Seq B.Builder
     insertCloseParen s = case Seq.viewr s of
@@ -257,8 +262,8 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
 
     buildUnwords sq =
       case Seq.viewl sq of
-      Seq.EmptyL -> mempty
-      t Seq.:< ts -> t <> F.foldMap (\ x -> B.singleton ' ' <> x) ts
+        Seq.EmptyL -> mempty
+        t Seq.:< ts -> t <> F.foldMap (\x -> B.singleton ' ' <> x) ts
 
     pTail Nothing = B.singleton ')'
     pTail (Just t) = B.fromString " . " <> B.fromText t <> B.singleton ')'
@@ -266,7 +271,6 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
     ppBasic (IAtom t) = Just (B.fromText t)
     ppBasic (IEmpty) = Just (B.fromString "()")
     ppBasic _ = Nothing
-
 
 -- | Modify the carrier type of a 'SExprPrinter' by describing how
 --   to convert the new type back to the previous type. For example,
@@ -277,8 +281,7 @@ unboundIndentPrintSExpr spec = finalize . go . toIntermediate spec
 -- >>> encodeOne printer (WFSList [WFSAtom "ele", WFSAtom "phant"])
 -- "(ele phant)"
 setFromCarrier :: (c -> b) -> SExprPrinter a b -> SExprPrinter a c
-setFromCarrier fc pr = pr { fromCarrier = fromCarrier pr . fc }
-
+setFromCarrier fc pr = pr {fromCarrier = fromCarrier pr . fc}
 
 -- | Dictate a maximum width for pretty-printed s-expressions.
 --
@@ -286,8 +289,7 @@ setFromCarrier fc pr = pr { fromCarrier = fromCarrier pr . fc }
 -- >>> encodeOne printer (L [A "one", A "two", A "three"])
 -- "(one \n  two\n  three)"
 setMaxWidth :: Int -> SExprPrinter atom carrier -> SExprPrinter atom carrier
-setMaxWidth n pr = pr { maxWidth = Just n }
-
+setMaxWidth n pr = pr {maxWidth = Just n}
 
 -- | Allow the serialized s-expression to be arbitrarily wide. This
 --   makes all pretty-printing happen on a single line.
@@ -296,8 +298,7 @@ setMaxWidth n pr = pr { maxWidth = Just n }
 -- >>> encodeOne printer (L [A "one", A "two", A "three"])
 -- "(one two three)"
 removeMaxWidth :: SExprPrinter atom carrier -> SExprPrinter atom carrier
-removeMaxWidth pr = pr { maxWidth = Nothing }
-
+removeMaxWidth pr = pr {maxWidth = Nothing}
 
 -- | Set the number of spaces that a subsequent line will be indented
 --   after a swing indentation.
@@ -308,8 +309,7 @@ removeMaxWidth pr = pr { maxWidth = Nothing }
 -- >>> encodeOne (setIndentAmount 4) (L [A "elephant", A "pachyderm"])
 -- "(elephant \n    pachyderm)"
 setIndentAmount :: Int -> SExprPrinter atom carrier -> SExprPrinter atom carrier
-setIndentAmount n pr = pr { indentAmount = n }
-
+setIndentAmount n pr = pr {indentAmount = n}
 
 -- | Dictate how to indent subsequent lines based on the leading
 --   subexpression in an s-expression. For details on how this works,
@@ -322,8 +322,7 @@ setIndentAmount n pr = pr { indentAmount = n }
 -- >>> encodeOne printer (L [ A "elephant", A "among", A "pachyderms" ])
 -- "(elephant \n  among\n  pachyderms)"
 setIndentStrategy :: (SExpr atom -> Indent) -> SExprPrinter atom carrier -> SExprPrinter atom carrier
-setIndentStrategy st pr = pr { swingIndent = st }
-
+setIndentStrategy st pr = pr {swingIndent = st}
 
 spaceDot :: B.Builder
 spaceDot = B.singleton ' ' <> B.singleton '.' <> B.singleton ' '
@@ -331,8 +330,7 @@ spaceDot = B.singleton ' ' <> B.singleton '.' <> B.singleton ' '
 -- Indents a line by n spaces
 indent :: Int -> B.Builder -> B.Builder
 indent n ts =
-  mconcat [ B.singleton ' ' | _ <- [1..n]] <> ts
-
+  mconcat [B.singleton ' ' | _ <- [1 .. n]] <> ts
 
 -- Sort of like 'unlines' but without the trailing newline
 joinLinesS :: Seq.Seq B.Builder -> B.Builder
@@ -342,7 +340,6 @@ joinLinesS s = case Seq.viewl s of
     | F.null ts -> t
     | otherwise -> t <> B.fromString "\n" <> joinLinesS ts
 
-
 -- Sort of like 'unlines' but without the trailing newline
 unwordsS :: Seq.Seq B.Builder -> B.Builder
 unwordsS s = case Seq.viewl s of
@@ -351,13 +348,13 @@ unwordsS s = case Seq.viewl s of
     | F.null ts -> t
     | otherwise -> t <> " " <> unwordsS ts
 
-
 -- Indents every line n spaces, and adds a newline to the beginning
 -- used in swung indents
 indentAllS :: Int -> Seq.Seq B.Builder -> B.Builder
-indentAllS n s = if Seq.null s
-                 then ""
-                 else ("\n" <>) $ joinLinesS $ fmap (indent n) s
+indentAllS n s =
+  if Seq.null s
+    then ""
+    else ("\n" <>) $ joinLinesS $ fmap (indent n) s
 
 -- Indents every line but the first by some amount
 -- used in aligned indents
@@ -368,7 +365,6 @@ indentSubsequentS n s = case Seq.viewl s of
     | F.null ts -> t
     | otherwise -> joinLinesS (t Seq.<| fmap (indent n) ts)
 
-
 -- oh god this code is so disgusting
 -- i'm sorry to everyone i let down by writing this
 -- i swear i'll do better in the future i promise i have to
@@ -377,18 +373,17 @@ indentSubsequentS n s = case Seq.viewl s of
 -- | Pretty-print a 'SExpr' according to the options in a
 --   'LayoutOptions' value.
 prettyPrintSExpr :: SExprPrinter a (SExpr a) -> SExpr a -> TL.Text
-prettyPrintSExpr pr@SExprPrinter { .. } expr = case maxWidth of
+prettyPrintSExpr pr@SExprPrinter {..} expr = case maxWidth of
   Nothing
     | indentPrint -> unboundIndentPrintSExpr pr (fromCarrier expr)
-    | otherwise   -> flatPrintSExpr (fmap atomPrinter (fromCarrier expr))
-  Just w  -> indentPrintSExpr' w pr expr
-
+    | otherwise -> flatPrintSExpr (fmap atomPrinter (fromCarrier expr))
+  Just w -> indentPrintSExpr' w pr expr
 
 indentPrintSExpr' :: Int -> SExprPrinter a (SExpr a) -> SExpr a -> TL.Text
-indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toIntermediate pr
+indentPrintSExpr' maxAmt pr@SExprPrinter {..} = B.toLazyText . pp 0 . toIntermediate pr
   where
-    pp _   IEmpty       = B.fromString "()"
-    pp _   (IAtom t)    = B.fromText t
+    pp _ IEmpty = B.fromString "()"
+    pp _ (IAtom t) = B.fromText t
     pp ind (IList i sz h values end) =
       -- we always are going to have a head, a (possibly empty) body,
       -- and a (possibly empty) tail in our list formats
@@ -396,27 +391,27 @@ indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toInterm
       where
         -- the tail is either nothing, or the final dotted pair
         tl = case end of
-               Nothing -> mempty
-               Just x  -> B.fromString " . " <> B.fromText x
+          Nothing -> mempty
+          Just x -> B.fromString " . " <> B.fromText x
         -- the head is the pretty-printed head, with an ambient
         -- indentation of +1 to account for the left paren
-        hd = pp (ind+1) h
+        hd = pp (ind + 1) h
         indented =
           case i of
             SwingAfter n ->
               let (l, ls) = Seq.splitAt n values
-                  t  = unwordsS (fmap (pp (ind+1+1)) l) -- 1 for (, 1 for ' '
+                  t = unwordsS (fmap (pp (ind + 1 + 1)) l) -- 1 for (, 1 for ' '
                   nextInd = ind + indentAmount + 1 -- 1 for (
                   ts = indentAllS nextInd (fmap (pp nextInd) ls)
-              in B.singleton ' ' <> t <> ts
+               in B.singleton ' ' <> t <> ts
             Swing ->
               let nextInd = ind + indentAmount + 1 -- 1 for (
-              in indentAllS nextInd (fmap (pp nextInd) values)
+               in indentAllS nextInd (fmap (pp nextInd) values)
             Align ->
               let headWidth = sizeSum (sizeOf h)
                   nextInd = ind + headWidth + 1 + 1 -- 1 for (, 1 for ' ' below
-              in B.singleton ' ' <>
-                 indentSubsequentS nextInd (fmap (pp nextInd) values)
+               in B.singleton ' '
+                    <> indentSubsequentS nextInd (fmap (pp nextInd) values)
         body
           -- if there's nothing here, then we don't have anything to
           -- indent
@@ -428,7 +423,6 @@ indentPrintSExpr' maxAmt pr@SExprPrinter { .. } = B.toLazyText . pp 0 . toInterm
             -- otherwise we print the whole thing on one line!
             B.singleton ' ' <> unwordsS (fmap (pp (ind + 1)) values)
 
-
 -- if we don't indent anything, then we can ignore a bunch of the
 -- details above
 flatPrintSExpr :: SExpr Text -> TL.Text
@@ -436,27 +430,25 @@ flatPrintSExpr = B.toLazyText . pHead
   where
     pHead (SCons x xs) =
       B.singleton '(' <> pHead x <> pTail xs
-    pHead (SAtom t)    =
+    pHead (SAtom t) =
       B.fromText t
-    pHead SNil         =
+    pHead SNil =
       B.singleton '(' <> B.singleton ')'
 
     pTail (SCons x xs) =
       B.singleton ' ' <> pHead x <> pTail xs
     pTail (SAtom t) =
-      spaceDot <>
-      B.fromText t <>
-      B.singleton ')'
+      spaceDot
+        <> B.fromText t
+        <> B.singleton ')'
     pTail SNil =
       B.singleton ')'
-
 
 -- | Turn a single s-expression into a string according to a given
 --   'SExprPrinter'.
 encodeOne :: SExprPrinter atom carrier -> carrier -> Text
-encodeOne s@(SExprPrinter { .. }) =
-  TL.toStrict . prettyPrintSExpr (s { fromCarrier = id }) . fromCarrier
-
+encodeOne s@(SExprPrinter {..}) =
+  TL.toStrict . prettyPrintSExpr (s {fromCarrier = id}) . fromCarrier
 
 -- | Turn a list of s-expressions into a single string according to
 --   a given 'SExprPrinter'.
@@ -464,13 +456,11 @@ encode :: SExprPrinter atom carrier -> [carrier] -> Text
 encode spec =
   T.intercalate "\n\n" . map (encodeOne spec)
 
-
 -- | Turn a single s-expression into a lazy 'Text' according to a given
 --   'SExprPrinter'.
 encodeOneLazy :: SExprPrinter atom carrier -> carrier -> TL.Text
-encodeOneLazy s@(SExprPrinter { .. }) =
-  prettyPrintSExpr (s { fromCarrier = id }) . fromCarrier
-
+encodeOneLazy s@(SExprPrinter {..}) =
+  prettyPrintSExpr (s {fromCarrier = id}) . fromCarrier
 
 -- | Turn a list of s-expressions into a lazy 'Text' according to
 --   a given 'SExprPrinter'.

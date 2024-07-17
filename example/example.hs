@@ -32,20 +32,21 @@ toExpr sexpr = Left ("Unable to parse expression: " ++ show sexpr)
 
 fromExpr :: Expr -> SExpr Atom
 fromExpr (EOp op l r) = A (AOp op) ::: fromExpr l ::: fromExpr r ::: Nil
-fromExpr (ENum n)     = A (ANum n) ::: Nil
+fromExpr (ENum n) = A (ANum n) ::: Nil
 
 -- Parser and serializer for our Atom type
 pAtom :: Parser Atom
-pAtom = ((ANum . read) <$> many1 digit)
-     <|> (char '+' *> pure (AOp Add))
-     <|> (char '-' *> pure (AOp Sub))
-     <|> (char '*' *> pure (AOp Mul))
+pAtom =
+  ((ANum . read) <$> many1 digit)
+    <|> (char '+' *> pure (AOp Add))
+    <|> (char '-' *> pure (AOp Sub))
+    <|> (char '*' *> pure (AOp Mul))
 
 sAtom :: Atom -> Text
 sAtom (AOp Add) = "+"
 sAtom (AOp Sub) = "-"
 sAtom (AOp Mul) = "*"
-sAtom (ANum n)  = pack (show n)
+sAtom (ANum n) = pack (show n)
 
 -- Our comment syntax is going to be Haskell-like:
 hsComment :: Parser ()
@@ -55,25 +56,25 @@ hsComment = string "--" >> manyTill anyChar newline >> return ()
 -- hexadecimal number from it:
 hexReader :: Reader Atom
 hexReader _ = (A . ANum . rd) <$> many1 (satisfy isHexDigit)
-  where isHexDigit c = isDigit c || c `elem` hexChars
-        rd = fst . head . readHex
-        hexChars :: String
-        hexChars = "AaBbCcDdEeFf"
+  where
+    isHexDigit c = isDigit c || c `elem` hexChars
+    rd = fst . head . readHex
+    hexChars :: String
+    hexChars = "AaBbCcDdEeFf"
 
 -- Our final s-expression parser and printer:
 myLangParser :: SExprParser Atom Expr
-myLangParser
-  = setComment hsComment        -- set comment syntax to be Haskell-style
-  $ addReader '#' hexReader     -- add hex reader
-  $ setCarrier toExpr           -- convert final repr to Expr
-  $ mkParser pAtom              -- create spec with Atom type
+myLangParser =
+  setComment hsComment $ -- set comment syntax to be Haskell-style
+    addReader '#' hexReader $ -- add hex reader
+      setCarrier toExpr $ -- convert final repr to Expr
+        mkParser pAtom -- create spec with Atom type
 
 mkLangPrinter :: SExprPrinter Atom Expr
-mkLangPrinter
-  = setFromCarrier fromExpr
-  $ setIndentStrategy (const Align)
-  $ basicPrint sAtom
-
+mkLangPrinter =
+  setFromCarrier fromExpr $
+    setIndentStrategy (const Align) $
+      basicPrint sAtom
 
 main :: IO ()
 main = do

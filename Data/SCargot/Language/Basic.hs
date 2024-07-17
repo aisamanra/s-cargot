@@ -3,32 +3,40 @@
 module Data.SCargot.Language.Basic
   ( -- * Spec
     -- $descr
-    basicParser
-  , basicPrinter
-  , locatedBasicParser
-  , locatedBasicPrinter
-  ) where
+    basicParser,
+    basicPrinter,
+    locatedBasicParser,
+    locatedBasicPrinter,
+  )
+where
 
-import           Control.Applicative ((<$>))
-import           Data.Char (isAlphaNum)
-import           Text.Parsec (many1, satisfy)
-import           Data.Text (Text, pack)
-import           Data.Functor.Identity (Identity)
-import           Text.Parsec.Prim (ParsecT)
-
-import           Data.SCargot.Common (Located(..), located)
-import           Data.SCargot.Repr.Basic (SExpr)
-import           Data.SCargot ( SExprParser
-                              , SExprPrinter
-                              , mkParser
-                              , flatPrint
-                              )
+import Control.Applicative ((<$>))
+import Data.Char (isAlphaNum)
+import Data.Functor.Identity (Identity)
+import Data.SCargot
+  ( SExprParser,
+    SExprPrinter,
+    flatPrint,
+    mkParser,
+  )
+import Data.SCargot.Common (Located (..), located)
+import Data.SCargot.Repr.Basic (SExpr)
+import Data.Text (Text, pack)
+import Text.Parsec (many1, satisfy)
+import Text.Parsec.Prim (ParsecT)
 
 isAtomChar :: Char -> Bool
-isAtomChar c = isAlphaNum c
-  || c == '-' || c == '*' || c == '/'
-  || c == '+' || c == '<' || c == '>'
-  || c == '=' || c == '!' || c == '?'
+isAtomChar c =
+  isAlphaNum c
+    || c == '-'
+    || c == '*'
+    || c == '/'
+    || c == '+'
+    || c == '<'
+    || c == '>'
+    || c == '='
+    || c == '!'
+    || c == '?'
 
 pToken :: ParsecT Text a Identity Text
 pToken = pack <$> many1 (satisfy isAtomChar)
@@ -80,4 +88,5 @@ basicPrinter = flatPrint id
 -- "(1 elephant)"
 locatedBasicPrinter :: SExprPrinter (Located Text) (SExpr (Located Text))
 locatedBasicPrinter = flatPrint unLoc
-  where unLoc (At _loc e) = e
+  where
+    unLoc (At _loc e) = e
