@@ -5,6 +5,8 @@ module Data.SCargot.Parse
   ( -- * Parsing
     decode,
     decodeOne,
+    decode',
+    decodeOne',
 
     -- * Parsing Control
     SExprParser,
@@ -28,6 +30,7 @@ import Control.Applicative ((<$>), (<*), pure)
 import Control.Monad ((>=>))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import Data.SCargot.Common (HasLocation (..), Location (..), SError (..))
 import Data.SCargot.Repr
   ( RichSExpr,
     SExpr (..),
@@ -40,6 +43,7 @@ import Data.Text (Text)
 import Text.Parsec
   ( char,
     eof,
+    errorPos,
     lookAhead,
     many1,
     runParser,
@@ -72,7 +76,7 @@ data SExprParser atom carrier = SExprParser
   { sesPAtom :: Parser atom,
     readerMap :: ReaderMacroMap atom,
     comment :: Maybe Comment,
-    postparse :: SExpr atom -> Either String carrier
+    postparse :: SExpr atom -> Either SError carrier
   }
 
 -- | Create a basic 'SExprParser' when given a parser
@@ -101,7 +105,7 @@ mkParser parser =
 -- >>> let parser = setCarrier (return . toRich) (mkParser (many1 alphaNum))
 -- >>> decode parser "(ele phant)"
 -- Right [RSlist [RSAtom "ele",RSAtom "phant"]]
-setCarrier :: (b -> Either String c) -> SExprParser a b -> SExprParser a c
+setCarrier :: (b -> Either SError c) -> SExprParser a b -> SExprParser a c
 setCarrier f spec = spec {postparse = postparse spec >=> f}
 
 -- | Convert the final output representation from the 'SExpr' type
@@ -114,14 +118,25 @@ setCarrier f spec = spec {postparse = postparse spec >=> f}
 asRich :: SExprParser a (SExpr b) -> SExprParser a (RichSExpr b)
 asRich = setCarrier (return . toRich)
 
--- | Convert the final output representation from the 'SExpr' type
---   to the 'WellFormedSExpr' type.
+-- | Convert the final output representation from the 'SExpr' type to
+--   the 'WellFormedSExpr' type.
+--
+--   Note that, for error-reporting purposes, the underlying atom type
+--   must be able to report its source location using the
+--   'HasLocation' typeclass. In many cases, you can accomplish this
+--   trivially by applying 'Data.SCargot.Common.located' to your atom
+--   parser.
 --
 -- >>> import Text.Parsec (alphaNum, many1)
--- >>> let parser = asWellFormed (mkParser (many1 alphaNum))
+-- >>> let parser = asWellFormed (mkParser (located (many1 alphaNum)))
 -- >>> decode parser "(ele phant)"
--- Right [WFSList [WFSAtom "ele",WFSAtom "phant"]]
-asWellFormed :: SExprParser a (SExpr b) -> SExprParser a (WellFormedSExpr b)
+-- Right [
+--   WFSList [
+--     WFSAtom (At (Span (line 1, column 2) (line 1, column 5)) "ele"),
+--     WFSAtom (At (Span (line 1, column 6) (line 1, column 11)) "phant")
+--   ]
+-- ]
+asWellFormed :: HasLocation b => SExprParser a (SExpr b) -> SExprParser a (WellFormedSExpr b)
 asWellFormed = setCarrier toWellFormed
 
 -- | Add the ability to execute some particular reader macro, as
@@ -221,9 +236,11 @@ buildSkip (Just c) = alternate
   where
     alternate = skipMany space >> ((c >> alternate) <|> return ())
 
-doParse :: Parser a -> Text -> Either String a
+doParse :: Parser a -> Text -> Either SError a
 doParse p t = case runParser p () "" t of
-  Left err -> Left (show err)
+  Left err ->
+    let pos = errorPos err
+     in Left (SError (show err) (Span pos pos))
   Right x -> Right x
 
 -- | Decode a single S-expression. If any trailing input is left after
@@ -231,7 +248,16 @@ doParse p t = case runParser p () "" t of
 --   will fail: for those cases, use 'decode', which returns a list of
 --   all the S-expressions found at the top level.
 decodeOne :: SExprParser atom carrier -> Text -> Either String carrier
-decodeOne spec = doParse (parser <* eof) >=> (postparse spec)
+decodeOne spec input = case decodeOne' spec input of
+  Left err -> Left (sErrorMessage err)
+  Right x -> Right x
+
+-- | Decode a single S-expression. If any trailing input is left after
+--   the S-expression (ignoring comments or whitespace) then this
+--   will fail: for those cases, use 'decode', which returns a list of
+--   all the S-expressions found at the top level.
+decodeOne' :: SExprParser atom carrier -> Text -> Either SError carrier
+decodeOne' spec = doParse (parser <* eof) >=> (postparse spec)
   where
     parser =
       parseGenericSExpr
@@ -243,7 +269,15 @@ decodeOne spec = doParse (parser <* eof) >=> (postparse spec)
 --   will return a list of every S-expression that appears at the top-level
 --   of the document.
 decode :: SExprParser atom carrier -> Text -> Either String [carrier]
-decode spec =
+decode spec input = case decode' spec input of
+  Left err -> Left (sErrorMessage err)
+  Right x -> Right x
+
+-- | Decode several S-expressions according to a given 'SExprParser'. This
+--   will return a list of every S-expression that appears at the top-level
+--   of the document.
+decode' :: SExprParser atom carrier -> Text -> Either SError [carrier]
+decode' spec =
   doParse (many1 parser <* eof) >=> mapM (postparse spec)
   where
     parser =

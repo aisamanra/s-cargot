@@ -5,6 +5,8 @@ module Data.SCargot
     -- * Parsing and Printing
     decode,
     decodeOne,
+    decode',
+    decodeOne',
     encode,
     encodeOne,
 

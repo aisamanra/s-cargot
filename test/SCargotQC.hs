@@ -153,7 +153,7 @@ encDecWFWide s =
     == Right s
 
 decEncWF :: EncodedSExpr -> Bool
-decEncWF s = decodeOne (asWellFormed parser) (encoding s) == toWellFormed (original s)
+decEncWF s = decodeOne' (asWellFormed parser) (encoding s) == toWellFormed (original s)
 
 insertComments :: Text -> Text -> Text -> Text
 insertComments lc rc sexpr =
