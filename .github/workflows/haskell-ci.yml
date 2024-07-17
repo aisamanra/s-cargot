@@ -16,6 +16,8 @@ name: Haskell-CI
 on:
   - push
   - pull_request
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 jobs:
   linux:
     name: Haskell-CI - Linux - ${{ matrix.compiler }}
@@ -155,7 +157,7 @@ jobs:
           chmod a+x $HOME/.cabal/bin/cabal-plan
           cabal-plan --version
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
         with:
           path: source
       - name: initial cabal.project for sdist
