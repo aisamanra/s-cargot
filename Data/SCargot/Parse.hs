@@ -118,13 +118,24 @@ setCarrier f spec = spec {postparse = postparse spec >=> f}
 asRich :: SExprParser a (SExpr b) -> SExprParser a (RichSExpr b)
 asRich = setCarrier (return . toRich)
 
--- | Convert the final output representation from the 'SExpr' type
---   to the 'WellFormedSExpr' type.
+-- | Convert the final output representation from the 'SExpr' type to
+--   the 'WellFormedSExpr' type.
+--
+--   Note that, for error-reporting purposes, the underlying atom type
+--   must be able to report its source location using the
+--   'HasLocation' typeclass. In many cases, you can accomplish this
+--   trivially by applying 'Data.SCargot.Common.located' to your atom
+--   parser.
 --
 -- >>> import Text.Parsec (alphaNum, many1)
--- >>> let parser = asWellFormed (mkParser (many1 alphaNum))
+-- >>> let parser = asWellFormed (mkParser (located (many1 alphaNum)))
 -- >>> decode parser "(ele phant)"
--- Right [WFSList [WFSAtom "ele",WFSAtom "phant"]]
+-- Right [
+--   WFSList [
+--     WFSAtom (At (Span (line 1, column 2) (line 1, column 5)) "ele"),
+--     WFSAtom (At (Span (line 1, column 6) (line 1, column 11)) "phant")
+--   ]
+-- ]
 asWellFormed :: HasLocation b => SExprParser a (SExpr b) -> SExprParser a (WellFormedSExpr b)
 asWellFormed = setCarrier toWellFormed
 

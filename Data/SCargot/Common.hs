@@ -394,7 +394,7 @@ signedHexNumber = ($) <$> sign <*> hexNumber
 class HasLocation t where
   getLocation :: t -> Location
 
--- |
+-- | A representation of a source location.
 data Location = Span !SourcePos !SourcePos
   deriving (Eq, Ord, Show)
 
@@ -404,6 +404,9 @@ data Location = Span !SourcePos !SourcePos
 data Located a = At !Location a
   deriving (Eq, Ord, Show)
 
+-- | A Typeclass for things which contain or can produce a "Location"
+-- value. For a simple wrapper that can apply to any time, see the
+-- "Located" type.
 instance HasLocation (Located a) where
   getLocation (At loc _) = loc
 
@@ -424,6 +427,8 @@ dLocation = Span dPos dPos
   where
     dPos = newPos "" 0 0
 
+-- | An error message from s-expression parsing. This gives access to
+-- location information as well as an informative error message.
 data SError = SError
   { sErrorMessage :: String,
     sErrorLocation :: Location
