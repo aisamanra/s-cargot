@@ -33,6 +33,8 @@ module Data.SCargot.Common
     Located (..),
     located,
     dLocation,
+    HasLocation (..),
+    SError (..),
   )
 where
 
@@ -389,6 +391,9 @@ hexNumber = number 16 hexDigit
 signedHexNumber :: Parser Integer
 signedHexNumber = ($) <$> sign <*> hexNumber
 
+class HasLocation t where
+  getLocation :: t -> Location
+
 -- |
 data Location = Span !SourcePos !SourcePos
   deriving (Eq, Ord, Show)
@@ -398,6 +403,9 @@ data Location = Span !SourcePos !SourcePos
 -- thread.
 data Located a = At !Location a
   deriving (Eq, Ord, Show)
+
+instance HasLocation (Located a) where
+  getLocation (At loc _) = loc
 
 -- | Adds a source span to a parser.
 located :: Parser a -> Parser (Located a)
@@ -412,6 +420,12 @@ dLocation :: Location
 dLocation = Span dPos dPos
   where
     dPos = newPos "" 0 0
+
+data SError = SError
+  { sErrorMessage :: String,
+    sErrorLocation :: Location
+  }
+  deriving (Eq, Show)
 
 -- $intro
 --

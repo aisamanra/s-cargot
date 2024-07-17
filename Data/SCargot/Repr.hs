@@ -22,6 +22,7 @@ where
 
 import Data.Data (Data)
 import Data.Foldable (Foldable (..))
+import Data.SCargot.Common (HasLocation (..), SError (..))
 import Data.Traversable (Traversable (..))
 import Data.Typeable (Typeable)
 import GHC.Exts (IsList (..), IsString (..))
@@ -130,14 +131,14 @@ instance IsString atom => IsString (WellFormedSExpr atom) where
 --   > case toWellFormed x of
 --   >   Left _  -> True
 --   >   Right y -> x == fromWellFormed y
-toWellFormed :: SExpr atom -> Either String (WellFormedSExpr atom)
+toWellFormed :: HasLocation atom => SExpr atom -> Either String (WellFormedSExpr atom)
 toWellFormed SNil = return (WFSList [])
 toWellFormed (SAtom a) = return (WFSAtom a)
 toWellFormed (SCons x xs) = do
   x' <- toWellFormed x
   go xs (x' :)
   where
-    go (SAtom _) _ = Left "Found atom in cdr position"
+    go (SAtom _) _ = Left (SError "Found atom in cdr position" (getLocation a))
     go SNil rs = return (WFSList (rs []))
     go (SCons y ys) rs = do
       y' <- toWellFormed y
